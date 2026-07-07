@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "242283339931",
+    "project_id": "multi-branch-stock-manager",
+    "storage_bucket": "multi-branch-stock-manager.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:242283339931:android:f21fee0bac6f68e718a63e",
+        "android_client_info": {
+          "package_name": "com.branchstock.branch_stock_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD83CC9lCiaSEszgFM325efcuMXZAGc8QE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
