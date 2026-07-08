@@ -139,39 +139,31 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 - `main.dart` initially still referenced the old placeholder `Scaffold` instead of the new screen after a partial edit — fixed by replacing the `home:` block fully
 
 ---
+## Phase 6 — Kitchen dashboard
+**Dates:** 8 July 2026
 
-## Phase 6 — Kitchen dashboard (planned)
 **Goal:** Kitchen staff see all requested orders and can mark them as preparing, triggering central stock deduction.
 
-**Planned tasks:**
-- [ ]
-- [ ]
-
 **Completed:**
--
-
-**Decisions made:**
--
+- Built `KitchenDashboardScreen` showing orders split by status (Requested / Preparing)
+- Added role-based routing in `main.dart` (kitchenStaff → dashboard, others → branch order screen)
+- Confirmed `prepareOrder()` transaction works correctly: order status updates, central stock quantity decreases, and a `stockMovements` ledger entry is created atomically
+- Verified in Firestore Console: stock quantity and ledger entries both correct after preparing an order
 
 **Issues & resolutions:**
--
+- Role-based routing initially appeared not to work after editing `main.dart` — cause was stale app state from hot reload, not a code or data issue; resolved with a full stop/restart (`q` then `flutter run` again) rather than hot reload
 
----
+-----------
 
-## Template for future phases
+## Phase 7 — Delivery screen
+**Dates:** 8 July 2026
 
-```
-## Phase N — [name]
-**Dates:**
-
-**Goal:**
+**Goal:** Delivery staff see orders ready for delivery and mark them as delivered.
 
 **Completed:**
--
-
-**Decisions made:**
--
+- Built `DeliveryScreen` showing orders split by status (Preparing / Delivered)
+- Extended role-based routing in `main.dart` to three roles (kitchenStaff, delivery, branchStaff default)
+- Confirmed full status flow end to end: requested → preparing → delivered, tested manually across three different logged-in roles
 
 **Issues & resolutions:**
--
-```
+- None
