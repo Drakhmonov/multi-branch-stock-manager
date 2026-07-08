@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'models/user_model.dart';
 import 'screens/login_screen.dart';
+import 'screens/branch_order_screen.dart';
+import 'screens/kitchen_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,12 +34,9 @@ class _MyAppState extends State<MyApp> {
       ),
       home: _currentUser == null
           ? LoginScreen(onLoginSuccess: (user) => setState(() => _currentUser = user))
-          : Scaffold(
-              appBar: AppBar(title: Text('Welcome, ${_currentUser!.name}')),
-              body: Center(
-                child: Text('Logged in as: ${_currentUser!.role.name}'),
-              ),
-            ),
+          : _currentUser!.role == UserRole.kitchenStaff
+              ? KitchenDashboardScreen(currentUser: _currentUser!)
+              : BranchOrderScreen(currentUser: _currentUser!),
     );
   }
 }
