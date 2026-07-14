@@ -167,3 +167,23 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None
+
+-----------
+
+## Phase 8 — Branch home hub, receive delivery & daily stock update
+**Dates:** 14 July 2026
+
+**Goal:** Give branch staff a proper home screen and complete their side of the stock loop — confirming deliveries and logging daily sold/wasted quantities against the ledger.
+
+**Completed:**
+- Built `BranchHomeScreen`: a hub with three tiles (Place an Order, Receive Delivery, Daily Stock Update) replacing the old direct-to-order-screen routing
+- Built `ReceiveDeliveryScreen`: streams orders with status `delivered` for the branch, lets staff confirm receipt (`confirmReceived()`), which updates branch stock
+- Built `DailyStockUpdateScreen`: streams stock items currently held at the branch, lets staff enter sold/wasted quantities per item, submits via `logDailyUsage()` per item to the ledger
+- Updated `main.dart` routing so `branchStaff` lands on `BranchHomeScreen` instead of going straight to `BranchOrderScreen`
+- Confirmed the branch-side loop end to end: home → receive delivery → confirm receipt updates stock; home → daily update → submit logs sold/wasted to ledger
+
+**Decisions made:**
+- Daily update submits all changed items in one batch action rather than per-row saves, to match how staff would realistically do it once at the end of a shift
+
+**Issues & resolutions:**
+- None

@@ -3,9 +3,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'models/user_model.dart';
 import 'screens/login_screen.dart';
-import 'screens/branch_order_screen.dart';
 import 'screens/kitchen_dashboard_screen.dart';
 import 'screens/delivery_screen.dart';
+import 'screens/branch_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +39,7 @@ class _MyAppState extends State<MyApp> {
               ? KitchenDashboardScreen(currentUser: _currentUser!)
               : _currentUser!.role == UserRole.delivery
                   ? DeliveryScreen(currentUser: _currentUser!)
-                  : BranchOrderScreen(currentUser: _currentUser!),
+                  : BranchHomeScreen(currentUser: _currentUser!),
     );
   }
 }
