@@ -1,4 +1,4 @@
-enum OrderStatus { requested, preparing, delivered, cancelled }
+enum OrderStatus { requested, preparing, delivered, received, cancelled }
 
 class OrderItem {
   final String stockItemId;

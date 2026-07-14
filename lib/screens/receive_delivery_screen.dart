@@ -48,36 +48,67 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final delivered = (snapshot.data ?? [])
-              .where((o) => o.status == OrderStatus.delivered)
+
+          final relevant = (snapshot.data ?? [])
+              .where((o) =>
+                  o.status == OrderStatus.delivered ||
+                  o.status == OrderStatus.received)
               .toList();
 
-          if (delivered.isEmpty) {
-            return const Center(child: Text('No deliveries waiting to be confirmed.'));
+          if (relevant.isEmpty) {
+            return const Center(child: Text('No order.'));
           }
+
+          final toReceive = relevant
+              .where((o) => o.status == OrderStatus.delivered)
+              .toList();
+          final received = relevant
+              .where((o) => o.status == OrderStatus.received)
+              .toList();
 
           return ListView(
             padding: const EdgeInsets.all(12),
-            children: delivered.map((order) => Card(
-                  child: ListTile(
-                    title: Text(order.items
-                        .map((i) => '${i.name} x${i.quantity}')
-                        .join(', ')),
-                    subtitle: const Text('Delivered — awaiting confirmation'),
-                    trailing: ElevatedButton(
-                      onPressed: _processingIds.contains(order.id)
-                          ? null
-                          : () => _handleConfirm(order),
-                      child: _processingIds.contains(order.id)
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Confirm Received'),
+            children: [
+              Text('Receive Order (${toReceive.length})',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              if (toReceive.isEmpty) const Text('No order.'),
+              ...toReceive.map((order) => Card(
+                    child: ListTile(
+                      title: Text(order.items
+                          .map((i) => '${i.name} x${i.quantity}')
+                          .join(', ')),
+                      subtitle: const Text('Delivered — awaiting confirmation'),
+                      trailing: ElevatedButton(
+                        onPressed: _processingIds.contains(order.id)
+                            ? null
+                            : () => _handleConfirm(order),
+                        child: _processingIds.contains(order.id)
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Confirm Received'),
+                      ),
                     ),
-                  ),
-                )).toList(),
+                  )),
+              const SizedBox(height: 24),
+              Text('Received Order (${received.length})',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              if (received.isEmpty) const Text('No order.'),
+              ...received.map((order) => Card(
+                    color: Colors.green[50],
+                    child: ListTile(
+                      title: Text(order.items
+                          .map((i) => '${i.name} x${i.quantity}')
+                          .join(', ')),
+                      subtitle: const Text('Received — stock updated'),
+                      trailing: const Icon(Icons.check_circle, color: Colors.green),
+                    ),
+                  )),
+            ],
           );
         },
       ),

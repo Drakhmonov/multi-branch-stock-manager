@@ -145,6 +145,8 @@ class FirestoreService {
           timestamp: DateTime.now(),
         ).toMap());
       }
+
+      tx.update(_db.collection('orders').doc(order.id), {'status': OrderStatus.received.name});
     });
   }
 

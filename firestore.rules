@@ -1,0 +1,117 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function myRole() {
+      return me().role;
+    }
+
+    function myBranchId() {
+      return me().branchId;
+    }
+
+    // ---------- USERS ----------
+    // Profiles are created once (manually or via sign-up) and not self-editable,
+    // so a signed-in user can't escalate their own role.
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // ---------- BRANCHES ----------
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && myRole() == 'manager';
+    }
+
+    // ---------- STOCK ITEMS (central) ----------
+    // Everyone needs to see central stock (branch to order, kitchen/manager to manage it).
+    // Only kitchen/manager can change quantities or cost.
+    match /stockItems/{itemId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && myRole() in ['kitchenStaff', 'manager'];
+    }
+
+    // ---------- BRANCH STOCK ----------
+    // A branch can only see and change its own holdings; kitchen/manager can see all
+    // for cross-branch operational visibility.
+    match /branchStock/{docId} {
+      allow read: if isSignedIn() && (
+        myRole() in ['kitchenStaff', 'manager'] ||
+        (myRole() == 'branchStaff' &&
+          (resource == null || resource.data.branchId == myBranchId()))
+      );
+      allow create, update: if isSignedIn() &&
+        myRole() == 'branchStaff' &&
+        request.resource.data.branchId == myBranchId();
+      allow delete: if false;
+    }
+
+    // ---------- ORDERS ----------
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (
+        myRole() in ['kitchenStaff', 'delivery', 'manager'] ||
+        (myRole() == 'branchStaff' && resource.data.branchId == myBranchId())
+      );
+
+      // Branch staff place orders only for their own branch, starting as 'requested'.
+      allow create: if isSignedIn() &&
+        myRole() == 'branchStaff' &&
+        request.resource.data.branchId == myBranchId() &&
+        request.resource.data.status == 'requested';
+
+      // Kitchen advances requested -> preparing; delivery advances preparing -> delivered;
+      // the owning branch advances delivered -> received. Only the status field may change.
+      allow update: if isSignedIn() && (
+        (myRole() == 'kitchenStaff' &&
+          resource.data.status == 'requested' &&
+          request.resource.data.status == 'preparing' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+        (myRole() == 'delivery' &&
+          resource.data.status == 'preparing' &&
+          request.resource.data.status == 'delivered' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+        (myRole() == 'branchStaff' &&
+          resource.data.branchId == myBranchId() &&
+          resource.data.status == 'delivered' &&
+          request.resource.data.status == 'received' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+      );
+
+      allow delete: if false;
+    }
+
+    // ---------- STOCK MOVEMENTS (immutable ledger) ----------
+    // Only ever created, by whichever role's action produces that movement type;
+    // never updated or deleted, matching the ledger-as-source-of-truth design.
+    match /stockMovements/{movementId} {
+      allow read: if isSignedIn() && (
+        myRole() == 'manager' ||
+        (myRole() == 'branchStaff' && resource.data.branchId == myBranchId())
+      );
+
+      allow create: if isSignedIn() &&
+        request.resource.data.performedBy == request.auth.uid && (
+        (myRole() == 'kitchenStaff' &&
+          request.resource.data.type in ['orderDeducted', 'restock']) ||
+        (myRole() == 'manager' &&
+          request.resource.data.type == 'restock') ||
+        (myRole() == 'branchStaff' &&
+          request.resource.data.type in ['received', 'sold', 'wasted'] &&
+          request.resource.data.branchId == myBranchId())
+      );
+
+      allow update, delete: if false;
+    }
+  }
+}

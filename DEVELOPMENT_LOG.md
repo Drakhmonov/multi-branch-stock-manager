@@ -207,3 +207,25 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 - Manual testing found `ReceiveDeliveryScreen` silently showing "No deliveries waiting to be confirmed" even after a real delivery — traced to `FirestoreService.streamOrders(branchId: ...)`, which combines a `.where('branchId', ...)` filter with `.orderBy('createdAt')` on Firestore, a combination that requires a composite index. The index didn't exist, so the query failed with `FAILED_PRECONDITION`, and because the screen never checks `snapshot.hasError`, the failure rendered as an ordinary empty state instead of a visible error. This blocked the entire downstream chain: no confirmed receipt → branch stock never populated → nothing to log in Daily Stock Update → manager dashboard showed £0.00 despite orders having been prepared and delivered correctly
 - Fixed by adding `firestore.indexes.json` (composite index on `orders`: `branchId` ASC, `createdAt` DESC) and deploying via `firebase deploy --only firestore:indexes`; re-ran the walkthrough afterwards and confirmed the manager dashboard shows correct non-zero sold/wasted values
 - Noted as a gap worth addressing later: Firestore stream builders in this app generally don't surface `snapshot.hasError`, so future index/permission errors would fail the same silent way; also, Firestore is still in test mode with rules due to expire roughly 30 days after being enabled — proper security rules are the next priority
+
+-----------
+
+## Phase 10 — Firestore security rules & closing the double-receive gap
+**Dates:** 14 July 2026
+
+**Goal:** Replace the open test-mode rules with real role-based security rules now that all four role screens exist to test against, and re-run the full lifecycle to confirm nothing regresses.
+
+**Completed:**
+- Wrote `firestore.rules`: role read/write scoping per collection — `users` self-read-only and not client-editable (no self role escalation); `stockItems` readable by all, writable by kitchen/manager; `branchStock` and `orders` scoped to the owning branch for branch staff, broader visibility for kitchen/delivery/manager; `stockMovements` create-only for the relevant role and never updatable/deletable, matching the immutable-ledger design from Phase 3
+- Wired `firebase.json` to the new rules file and deployed via `firebase deploy --only firestore:rules`; confirmed unauthenticated access is now rejected (`PERMISSION_DENIED`)
+- Added a `received` `OrderStatus` and had `confirmReceived()` advance the order to it as part of the existing transaction, so a confirmed delivery is distinguishable from one still awaiting confirmation
+- Split `ReceiveDeliveryScreen` into three states — "No order" (nothing at all), "Receive Order" (delivered, awaiting confirmation), "Received Order" (confirmed) — matching the section pattern already used in the kitchen and delivery screens
+- Re-ran the full four-role walkthrough end to end against the deployed rules to confirm nothing broke
+
+**Decisions made:**
+- None beyond what's captured in the fixes below
+
+**Issues & resolutions:**
+- The Branch test account had no `branchId` set in Firestore; the app's Dart-side `?? 'unknown'` fallback had been masking this, but security rules compare against the real stored field, so orders/receipts would have been silently rejected. Fixed by setting a real `branchId` on the account before deploying rules
+- First deploy of the `branchStock` read rule denied `confirmReceived()` on any brand-new branch+item combo: the rule read `resource.data.branchId`, but a transactional `get()` on a not-yet-existing document has `resource == null`, so the comparison errored and denied. Fixed by explicitly allowing `resource == null` in that rule
+- Caught, independent of the rules work: `confirmReceived()` never changed the order's status, so a confirmed delivery stayed flagged `delivered` forever — nothing prevented branch staff from tapping "Confirm Received" twice on the same order and double-counting stock. Fixed by advancing the order to `received` in the same transaction and updating the UI/rules to match
