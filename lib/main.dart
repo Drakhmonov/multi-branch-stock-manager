@@ -6,6 +6,7 @@ import 'screens/login_screen.dart';
 import 'screens/kitchen_dashboard_screen.dart';
 import 'screens/delivery_screen.dart';
 import 'screens/branch_home_screen.dart';
+import 'screens/manager_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,9 @@ class _MyAppState extends State<MyApp> {
               ? KitchenDashboardScreen(currentUser: _currentUser!)
               : _currentUser!.role == UserRole.delivery
                   ? DeliveryScreen(currentUser: _currentUser!)
-                  : BranchHomeScreen(currentUser: _currentUser!),
+                  : _currentUser!.role == UserRole.manager
+                      ? ManagerDashboardScreen(currentUser: _currentUser!)
+                      : BranchHomeScreen(currentUser: _currentUser!),
     );
   }
 }

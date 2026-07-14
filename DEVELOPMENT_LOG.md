@@ -187,3 +187,23 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None
+
+-----------
+
+## Phase 9 — Manager dashboard & a real production bug found through testing
+**Dates:** 14 July 2026
+
+**Goal:** Give managers the branch-comparison reporting the data model was designed for (Phase 3), and manually walk the full order lifecycle end to end across all four roles to prove the app actually works, not just that each screen compiles.
+
+**Completed:**
+- Built `ManagerDashboardScreen`: a period selector (today / 7 days / 30 days / all time) over `streamMovements()`, showing total sold value, total wasted value, a waste-rate percentage, and a per-branch breakdown — all computed as filtered queries over the `stockMovements` ledger, per the Phase 3 decision
+- Added `manager` branch to the role-based routing in `main.dart`
+- Created four real test accounts (kitchen, delivery, manager, branch) and manually walked the entire lifecycle: place order → prepare (kitchen) → deliver → confirm receipt (branch) → log daily sold/wasted (branch) → verify totals on the manager dashboard
+
+**Decisions made:**
+- Report totals are valued at `costAtTime` recorded on each ledger entry (not current stock item cost), consistent with the ledger's immutability principle
+
+**Issues & resolutions:**
+- Manual testing found `ReceiveDeliveryScreen` silently showing "No deliveries waiting to be confirmed" even after a real delivery — traced to `FirestoreService.streamOrders(branchId: ...)`, which combines a `.where('branchId', ...)` filter with `.orderBy('createdAt')` on Firestore, a combination that requires a composite index. The index didn't exist, so the query failed with `FAILED_PRECONDITION`, and because the screen never checks `snapshot.hasError`, the failure rendered as an ordinary empty state instead of a visible error. This blocked the entire downstream chain: no confirmed receipt → branch stock never populated → nothing to log in Daily Stock Update → manager dashboard showed £0.00 despite orders having been prepared and delivered correctly
+- Fixed by adding `firestore.indexes.json` (composite index on `orders`: `branchId` ASC, `createdAt` DESC) and deploying via `firebase deploy --only firestore:indexes`; re-ran the walkthrough afterwards and confirmed the manager dashboard shows correct non-zero sold/wasted values
+- Noted as a gap worth addressing later: Firestore stream builders in this app generally don't surface `snapshot.hasError`, so future index/permission errors would fail the same silent way; also, Firestore is still in test mode with rules due to expire roughly 30 days after being enabled — proper security rules are the next priority
