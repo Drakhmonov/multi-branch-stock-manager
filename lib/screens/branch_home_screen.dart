@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
+import '../services/firestore_service.dart';
 import 'branch_order_screen.dart';
 import 'receive_delivery_screen.dart';
 import 'daily_stock_update_screen.dart';
+import 'branch_history_screen.dart';
 
 class BranchHomeScreen extends StatelessWidget {
   final UserModel currentUser;
@@ -11,8 +13,19 @@ class BranchHomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<Map<String, String>>(
+      stream: FirestoreService().streamBranchNames(),
+      builder: (context, branchSnapshot) {
+        final branchName =
+            branchSnapshot.data?[currentUser.branchId] ?? 'Branch';
+        return _buildScaffold(context, branchName);
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, String branchName) {
     return Scaffold(
-      appBar: AppBar(title: Text('Branch — ${currentUser.name}')),
+      appBar: AppBar(title: Text('$branchName — ${currentUser.name}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -42,7 +55,18 @@ class BranchHomeScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => DailyStockUpdateScreen(currentUser: currentUser),
+                builder: (_) =>
+                    DailyStockUpdateScreen(currentUser: currentUser),
+              ),
+            ),
+          ),
+          _HomeTile(
+            title: 'History',
+            icon: Icons.history,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BranchHistoryScreen(currentUser: currentUser),
               ),
             ),
           ),
@@ -57,7 +81,11 @@ class _HomeTile extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _HomeTile({required this.title, required this.icon, required this.onTap});
+  const _HomeTile({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {

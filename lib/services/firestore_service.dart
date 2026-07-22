@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/branch_model.dart';
 import '../models/stock_item_model.dart';
 import '../models/order_model.dart';
 import '../models/stock_movement_model.dart';
@@ -6,12 +7,47 @@ import '../models/stock_movement_model.dart';
 class FirestoreService {
   final _db = FirebaseFirestore.instance;
 
+  // ---------- BRANCHES ----------
+
+  Stream<List<BranchModel>> streamBranches() {
+    return _db
+        .collection('branches')
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => BranchModel.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  Future<void> addBranch({
+    required String name,
+    required String location,
+  }) async {
+    final branchRef = _db.collection('branches').doc();
+    await branchRef.set(
+      BranchModel(id: branchRef.id, name: name, location: location).toMap(),
+    );
+  }
+
+  /// Maps branchId -> branch name, for resolving ids on order/report screens.
+  Stream<Map<String, String>> streamBranchNames() {
+    return streamBranches().map(
+      (branches) => {for (final b in branches) b.id: b.name},
+    );
+  }
+
   // ---------- STOCK ITEMS (central) ----------
 
   Stream<List<StockItemModel>> streamStockItems() {
-    return _db.collection('stockItems').snapshots().map((snap) => snap.docs
-        .map((doc) => StockItemModel.fromMap(doc.id, doc.data()))
-        .toList());
+    return _db
+        .collection('stockItems')
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => StockItemModel.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 
   Future<void> addStockItem(StockItemModel item) async {
@@ -38,16 +74,19 @@ class FirestoreService {
         'lastUpdated': DateTime.now().toIso8601String(),
       });
 
-      tx.set(movementRef, StockMovementModel(
-        id: movementRef.id,
-        type: MovementType.restock,
-        itemId: itemId,
-        branchId: null,
-        quantity: quantity,
-        costAtTime: cost,
-        performedBy: performedBy,
-        timestamp: DateTime.now(),
-      ).toMap());
+      tx.set(
+        movementRef,
+        StockMovementModel(
+          id: movementRef.id,
+          type: MovementType.restock,
+          itemId: itemId,
+          branchId: null,
+          quantity: quantity,
+          costAtTime: cost,
+          performedBy: performedBy,
+          timestamp: DateTime.now(),
+        ).toMap(),
+      );
     });
   }
 
@@ -58,23 +97,32 @@ class FirestoreService {
     required List<OrderItem> items,
   }) async {
     final orderRef = _db.collection('orders').doc();
-    await orderRef.set(OrderModel(
-      id: orderRef.id,
-      branchId: branchId,
-      items: items,
-      status: OrderStatus.requested,
-      createdAt: DateTime.now(),
-    ).toMap());
+    await orderRef.set(
+      OrderModel(
+        id: orderRef.id,
+        branchId: branchId,
+        items: items,
+        status: OrderStatus.requested,
+        createdAt: DateTime.now(),
+      ).toMap(),
+    );
   }
 
   Stream<List<OrderModel>> streamOrders({String? branchId}) {
-    Query query = _db.collection('orders').orderBy('createdAt', descending: true);
+    Query query = _db
+        .collection('orders')
+        .orderBy('createdAt', descending: true);
     if (branchId != null) {
       query = query.where('branchId', isEqualTo: branchId);
     }
-    return query.snapshots().map((snap) => snap.docs
-        .map((doc) => OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>))
-        .toList());
+    return query.snapshots().map(
+      (snap) => snap.docs
+          .map(
+            (doc) =>
+                OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>),
+          )
+          .toList(),
+    );
   }
 
   /// Kitchen prepares an order: deducts central stock for each item, marks it preparing.
@@ -90,26 +138,33 @@ class FirestoreService {
         tx.update(itemRef, {'currentQty': currentQty - item.quantity});
 
         final movementRef = _db.collection('stockMovements').doc();
-        tx.set(movementRef, StockMovementModel(
-          id: movementRef.id,
-          type: MovementType.orderDeducted,
-          itemId: item.stockItemId,
-          branchId: order.branchId,
-          quantity: item.quantity,
-          costAtTime: cost,
-          performedBy: performedBy,
-          relatedOrderId: order.id,
-          timestamp: DateTime.now(),
-        ).toMap());
+        tx.set(
+          movementRef,
+          StockMovementModel(
+            id: movementRef.id,
+            type: MovementType.orderDeducted,
+            itemId: item.stockItemId,
+            branchId: order.branchId,
+            quantity: item.quantity,
+            costAtTime: cost,
+            performedBy: performedBy,
+            relatedOrderId: order.id,
+            timestamp: DateTime.now(),
+          ).toMap(),
+        );
       }
 
-      tx.update(_db.collection('orders').doc(order.id), {'status': OrderStatus.preparing.name});
+      tx.update(_db.collection('orders').doc(order.id), {
+        'status': OrderStatus.preparing.name,
+      });
     });
   }
 
   /// Delivery marks an order as delivered.
   Future<void> markDelivered(String orderId) async {
-    await _db.collection('orders').doc(orderId).update({'status': OrderStatus.delivered.name});
+    await _db.collection('orders').doc(orderId).update({
+      'status': OrderStatus.delivered.name,
+    });
   }
 
   /// Branch confirms receipt: increases branch stock, logs a movement at current item cost.
@@ -120,8 +175,9 @@ class FirestoreService {
         final itemSnap = await tx.get(itemRef);
         final cost = (itemSnap.data()?['costPerUnit'] ?? 0).toDouble();
 
-        final branchStockRef =
-            _db.collection('branchStock').doc('${order.branchId}_${item.stockItemId}');
+        final branchStockRef = _db
+            .collection('branchStock')
+            .doc('${order.branchId}_${item.stockItemId}');
         final stockSnap = await tx.get(branchStockRef);
         final currentQty = (stockSnap.data()?['currentQty'] ?? 0).toDouble();
 
@@ -133,20 +189,25 @@ class FirestoreService {
         });
 
         final movementRef = _db.collection('stockMovements').doc();
-        tx.set(movementRef, StockMovementModel(
-          id: movementRef.id,
-          type: MovementType.received,
-          itemId: item.stockItemId,
-          branchId: order.branchId,
-          quantity: item.quantity,
-          costAtTime: cost,
-          performedBy: performedBy,
-          relatedOrderId: order.id,
-          timestamp: DateTime.now(),
-        ).toMap());
+        tx.set(
+          movementRef,
+          StockMovementModel(
+            id: movementRef.id,
+            type: MovementType.received,
+            itemId: item.stockItemId,
+            branchId: order.branchId,
+            quantity: item.quantity,
+            costAtTime: cost,
+            performedBy: performedBy,
+            relatedOrderId: order.id,
+            timestamp: DateTime.now(),
+          ).toMap(),
+        );
       }
 
-      tx.update(_db.collection('orders').doc(order.id), {'status': OrderStatus.received.name});
+      tx.update(_db.collection('orders').doc(order.id), {
+        'status': OrderStatus.received.name,
+      });
     });
   }
 
@@ -157,11 +218,13 @@ class FirestoreService {
         .collection('branchStock')
         .where('branchId', isEqualTo: branchId)
         .snapshots()
-        .map((snap) => {
-              for (final doc in snap.docs)
-                doc.data()['itemId'] as String:
-                    (doc.data()['currentQty'] ?? 0).toDouble()
-            });
+        .map(
+          (snap) => {
+            for (final doc in snap.docs)
+              doc.data()['itemId'] as String: (doc.data()['currentQty'] ?? 0)
+                  .toDouble(),
+          },
+        );
   }
 
   /// Branch staff logs daily sold/wasted quantities for an item.
@@ -173,7 +236,9 @@ class FirestoreService {
     required String performedBy,
   }) async {
     final itemRef = _db.collection('stockItems').doc(itemId);
-    final branchStockRef = _db.collection('branchStock').doc('${branchId}_$itemId');
+    final branchStockRef = _db
+        .collection('branchStock')
+        .doc('${branchId}_$itemId');
 
     await _db.runTransaction((tx) async {
       final itemSnap = await tx.get(itemRef);
@@ -190,31 +255,84 @@ class FirestoreService {
 
       if (soldQty > 0) {
         final soldRef = _db.collection('stockMovements').doc();
-        tx.set(soldRef, StockMovementModel(
-          id: soldRef.id,
-          type: MovementType.sold,
-          itemId: itemId,
-          branchId: branchId,
-          quantity: soldQty,
-          costAtTime: cost,
-          performedBy: performedBy,
-          timestamp: DateTime.now(),
-        ).toMap());
+        tx.set(
+          soldRef,
+          StockMovementModel(
+            id: soldRef.id,
+            type: MovementType.sold,
+            itemId: itemId,
+            branchId: branchId,
+            quantity: soldQty,
+            costAtTime: cost,
+            performedBy: performedBy,
+            timestamp: DateTime.now(),
+          ).toMap(),
+        );
       }
 
       if (wastedQty > 0) {
         final wastedRef = _db.collection('stockMovements').doc();
-        tx.set(wastedRef, StockMovementModel(
-          id: wastedRef.id,
-          type: MovementType.wasted,
+        tx.set(
+          wastedRef,
+          StockMovementModel(
+            id: wastedRef.id,
+            type: MovementType.wasted,
+            itemId: itemId,
+            branchId: branchId,
+            quantity: wastedQty,
+            costAtTime: cost,
+            performedBy: performedBy,
+            timestamp: DateTime.now(),
+          ).toMap(),
+        );
+      }
+    });
+  }
+
+  /// Branch staff corrects a past mistake without editing history: logs a
+  /// signed adjustment (positive restores stock, negative removes more) and
+  /// applies it to branch stock. The original wrong entry and this fix both
+  /// stay visible in the ledger.
+  Future<void> logAdjustment({
+    required String branchId,
+    required String itemId,
+    required double delta,
+    required String note,
+    required String performedBy,
+  }) async {
+    final itemRef = _db.collection('stockItems').doc(itemId);
+    final branchStockRef = _db
+        .collection('branchStock')
+        .doc('${branchId}_$itemId');
+
+    await _db.runTransaction((tx) async {
+      final itemSnap = await tx.get(itemRef);
+      final cost = (itemSnap.data()?['costPerUnit'] ?? 0).toDouble();
+
+      final stockSnap = await tx.get(branchStockRef);
+      final currentQty = (stockSnap.data()?['currentQty'] ?? 0).toDouble();
+      final newQty = currentQty + delta;
+
+      tx.update(branchStockRef, {
+        'currentQty': newQty < 0 ? 0 : newQty,
+        'lastUpdated': DateTime.now().toIso8601String(),
+      });
+
+      final adjustmentRef = _db.collection('stockMovements').doc();
+      tx.set(
+        adjustmentRef,
+        StockMovementModel(
+          id: adjustmentRef.id,
+          type: MovementType.adjustment,
           itemId: itemId,
           branchId: branchId,
-          quantity: wastedQty,
+          quantity: delta,
           costAtTime: cost,
           performedBy: performedBy,
           timestamp: DateTime.now(),
-        ).toMap());
-      }
+          note: note,
+        ).toMap(),
+      );
     });
   }
 
@@ -230,14 +348,26 @@ class FirestoreService {
       query = query.where('branchId', isEqualTo: branchId);
     }
     if (from != null) {
-      query = query.where('timestamp', isGreaterThanOrEqualTo: from.toIso8601String());
+      query = query.where(
+        'timestamp',
+        isGreaterThanOrEqualTo: from.toIso8601String(),
+      );
     }
     if (to != null) {
-      query = query.where('timestamp', isLessThanOrEqualTo: to.toIso8601String());
+      query = query.where(
+        'timestamp',
+        isLessThanOrEqualTo: to.toIso8601String(),
+      );
     }
-    return query.snapshots().map((snap) => snap.docs
-        .map((doc) =>
-            StockMovementModel.fromMap(doc.id, doc.data() as Map<String, dynamic>))
-        .toList());
+    return query.snapshots().map(
+      (snap) => snap.docs
+          .map(
+            (doc) => StockMovementModel.fromMap(
+              doc.id,
+              doc.data() as Map<String, dynamic>,
+            ),
+          )
+          .toList(),
+    );
   }
 }

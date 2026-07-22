@@ -24,13 +24,19 @@ service cloud.firestore {
     // so a signed-in user can't escalate their own role.
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Self-signup can create any of the branch/kitchen/delivery roles, but
+      // never 'manager' — manager accounts are still created manually.
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.role != 'manager';
       allow update, delete: if false;
     }
 
     // ---------- BRANCHES ----------
+    // Public read: the sign-up screen needs to list branches for a new user
+    // to pick from before they have an account to be "signed in" with.
+    // Names/locations aren't sensitive; only writes are restricted.
     match /branches/{branchId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isSignedIn() && myRole() == 'manager';
     }
 
@@ -107,7 +113,7 @@ service cloud.firestore {
         (myRole() == 'manager' &&
           request.resource.data.type == 'restock') ||
         (myRole() == 'branchStaff' &&
-          request.resource.data.type in ['received', 'sold', 'wasted'] &&
+          request.resource.data.type in ['received', 'sold', 'wasted', 'adjustment'] &&
           request.resource.data.branchId == myBranchId())
       );
 

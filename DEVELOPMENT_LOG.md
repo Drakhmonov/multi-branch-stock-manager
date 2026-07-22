@@ -229,3 +229,28 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 - The Branch test account had no `branchId` set in Firestore; the app's Dart-side `?? 'unknown'` fallback had been masking this, but security rules compare against the real stored field, so orders/receipts would have been silently rejected. Fixed by setting a real `branchId` on the account before deploying rules
 - First deploy of the `branchStock` read rule denied `confirmReceived()` on any brand-new branch+item combo: the rule read `resource.data.branchId`, but a transactional `get()` on a not-yet-existing document has `resource == null`, so the comparison errored and denied. Fixed by explicitly allowing `resource == null` in that rule
 - Caught, independent of the rules work: `confirmReceived()` never changed the order's status, so a confirmed delivery stayed flagged `delivered` forever — nothing prevented branch staff from tapping "Confirm Received" twice on the same order and double-counting stock. Fixed by advancing the order to `received` in the same transaction and updating the UI/rules to match
+
+-----------
+
+## Phase 11 — Branch management, self-service sign-up, and a correction workflow
+**Dates:** 22 July 2026
+
+**Goal:** Make "multi-branch" a real, in-app feature rather than a manual Firebase Console step, and close two gaps surfaced by actually using the app: no way to review branch history, and no way to fix a mistaken daily-usage entry given the immutable ledger.
+
+**Completed:**
+- Added `branches` CRUD to `FirestoreService` (`streamBranches()`, `addBranch()`) and a manager-only `BranchManagementScreen` to create branches from the UI instead of the Firebase Console
+- Added `SignUpScreen`: new branch/kitchen/delivery staff can self-register, with a branch dropdown sourced live from the real `branches` collection; deliberately excludes the `manager` role from self-signup, with `firestore.rules` enforcing the same restriction server-side (self-created `users` docs can never set `role: manager`)
+- Resolved `branchId` to real branch names everywhere it was previously shown raw: `ManagerDashboardScreen`'s per-branch breakdown, `KitchenDashboardScreen` and `DeliveryScreen` order lists, and `BranchHomeScreen`'s title — via a new shared `streamBranchNames()` helper
+- Added `BranchHistoryScreen`, reachable from a new "History" tile on the branch home hub: streams that branch's full `stockMovements` ledger (sold/wasted/received/corrections), sorted newest-first client-side
+- Added a stock correction workflow: a "Log Correction" action on the history screen writes a signed `adjustment` movement (positive restores stock, negative removes more) with a required reason, rather than editing the original entry — keeping the ledger immutable while still giving branch staff a way to fix a mistake, with both the original entry and the fix visible in history
+- Added an optional `note` field to `StockMovementModel` to carry the correction reason
+- Updated `firestore.rules`: branch staff can now create `adjustment` movements (previously only `received`/`sold`/`wasted`); `branches` reads are now public (`allow read: if true`) rather than requiring sign-in
+
+**Decisions made:**
+- Manager accounts stay a manual Console step; only branch/kitchen/delivery are self-service, to avoid a public sign-up flow letting anyone grant themselves manager-level visibility into financials
+- Corrections are modeled as a new ledger entry, not an edit, consistent with the Phase 3 immutable-ledger decision — mistakes stay visible instead of being silently overwritten
+
+**Issues & resolutions:**
+- The sign-up screen's branch dropdown initially came back empty even though branches existed in Firestore: `streamBranches()` requires `isSignedIn()` per the original rule, but a new user isn't authenticated yet at sign-up time, so the read silently failed and the dropdown had nothing to show — the same "stream fails silently, UI doesn't check `hasError`" class of bug flagged back in Phase 9. Fixed by making `branches` reads public, since branch names/locations aren't sensitive and a pre-signup user has no other way to see them
+- "Create an account" originally used `Navigator.push` to show the sign-up screen on top of the login screen. On success, the app's top-level auth state updated correctly underneath, but the pushed route stayed on top of the navigator stack, so the screen never visibly changed — the user had no confirmation and, on retrying, hit "email already in use" from their first (actually successful) attempt. Fixed by making sign-up a top-level sibling of the login screen (matching how `main.dart` already switches screens on role), removing the stale route entirely, and adding an explicit "Account created" `SnackBar` via a `ScaffoldMessengerKey` that survives the screen swap
+- Twice during this phase, edits made to the running `flutter run` session weren't reflected in the browser — `flutter run` requires an explicit hot reload/restart trigger that isn't available when driven through a non-interactive background shell. Resolved by killing and relaunching the dev process after each batch of changes; worth automating properly (e.g. a VM service hot-reload call) if this keeps coming up

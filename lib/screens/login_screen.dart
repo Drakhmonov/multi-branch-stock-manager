@@ -4,8 +4,13 @@ import '../models/user_model.dart';
 
 class LoginScreen extends StatefulWidget {
   final void Function(UserModel user) onLoginSuccess;
+  final VoidCallback onCreateAccount;
 
-  const LoginScreen({super.key, required this.onLoginSuccess});
+  const LoginScreen({
+    super.key,
+    required this.onLoginSuccess,
+    required this.onCreateAccount,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -71,6 +76,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _handleLogin,
                     child: const Text('Sign In'),
                   ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: widget.onCreateAccount,
+              child: const Text('Create an account'),
+            ),
           ],
         ),
       ),

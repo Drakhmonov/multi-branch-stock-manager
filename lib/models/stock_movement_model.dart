@@ -1,4 +1,12 @@
-enum MovementType { restock, orderDeducted, delivered, received, sold, wasted, adjustment }
+enum MovementType {
+  restock,
+  orderDeducted,
+  delivered,
+  received,
+  sold,
+  wasted,
+  adjustment,
+}
 
 class StockMovementModel {
   final String id;
@@ -10,6 +18,8 @@ class StockMovementModel {
   final String performedBy;
   final String? relatedOrderId;
   final DateTime timestamp;
+  // Only meaningful for MovementType.adjustment: why a correction was made.
+  final String? note;
 
   StockMovementModel({
     required this.id,
@@ -21,18 +31,20 @@ class StockMovementModel {
     required this.performedBy,
     this.relatedOrderId,
     required this.timestamp,
+    this.note,
   });
 
   Map<String, dynamic> toMap() => {
-        'type': type.name,
-        'itemId': itemId,
-        'branchId': branchId,
-        'quantity': quantity,
-        'costAtTime': costAtTime,
-        'performedBy': performedBy,
-        'relatedOrderId': relatedOrderId,
-        'timestamp': timestamp.toIso8601String(),
-      };
+    'type': type.name,
+    'itemId': itemId,
+    'branchId': branchId,
+    'quantity': quantity,
+    'costAtTime': costAtTime,
+    'performedBy': performedBy,
+    'relatedOrderId': relatedOrderId,
+    'timestamp': timestamp.toIso8601String(),
+    'note': note,
+  };
 
   factory StockMovementModel.fromMap(String id, Map<String, dynamic> map) =>
       StockMovementModel(
@@ -48,5 +60,6 @@ class StockMovementModel {
         performedBy: map['performedBy'] ?? '',
         relatedOrderId: map['relatedOrderId'],
         timestamp: DateTime.parse(map['timestamp']),
+        note: map['note'],
       );
 }
