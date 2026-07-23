@@ -6,8 +6,9 @@ class _Step {
   final String label;
   final DateTime? at;
   final String? byName;
+  final String? note;
 
-  const _Step({required this.label, required this.at, this.byName});
+  const _Step({required this.label, required this.at, this.byName, this.note});
 }
 
 /// Vertical stepper showing an order's full journey — requested, preparing,
@@ -22,21 +23,29 @@ class OrderStatusTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = [
-      _Step(label: 'Requested', at: order.createdAt),
+      _Step(
+        label: 'Requested',
+        at: order.createdAt,
+        byName: order.placedByName,
+        note: order.note,
+      ),
       _Step(
         label: 'Preparing',
         at: order.preparingAt,
         byName: order.preparedByName,
+        note: order.preparingNote,
       ),
       _Step(
         label: 'Delivered',
         at: order.deliveredAt,
         byName: order.deliveredByName,
+        note: order.deliveredNote,
       ),
       _Step(
         label: 'Received',
         at: order.receivedAt,
         byName: order.receivedByName,
+        note: order.receivedNote,
       ),
     ];
 
@@ -77,6 +86,15 @@ class OrderStatusTimeline extends StatelessWidget {
                               ? '${formatTimestamp(steps[i].at!)} — by ${steps[i].byName}'
                               : formatTimestamp(steps[i].at!),
                           style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      if (steps[i].note != null && steps[i].note!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            '"${steps[i].note}"',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(fontStyle: FontStyle.italic),
+                          ),
                         ),
                     ],
                   ),

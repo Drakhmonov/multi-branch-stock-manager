@@ -4,6 +4,7 @@ import '../models/user_model.dart';
 import '../models/stock_movement_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
 import '../widgets/adaptive_nav_shell.dart';
 import '../widgets/stream_error_view.dart';
 import 'branch_management_screen.dart';
@@ -298,11 +299,7 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
                       branchName: branchName,
                     ),
                     title: Text(branchName),
-                    subtitle: Text(
-                      order.items
-                          .map((i) => '${i.name} x${i.quantity}')
-                          .join(', '),
-                    ),
+                    subtitle: Text(orderItemsSummary(order.items)),
                     trailing: Text(_statusLabel(order.status)),
                   ),
                 );

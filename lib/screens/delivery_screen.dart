@@ -3,6 +3,8 @@ import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
+import '../widgets/confirm_with_note_dialog.dart';
 import '../widgets/responsive_body.dart';
 import '../widgets/stream_error_view.dart';
 import 'order_detail_sheet.dart';
@@ -30,9 +32,20 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   final Set<String> _processingIds = {};
 
   Future<void> _handleDeliver(OrderModel order) async {
+    final note = await showConfirmWithNoteDialog(
+      context,
+      title: 'Mark Delivered',
+      actionLabel: 'Mark Delivered',
+    );
+    if (note == null) return;
+
     setState(() => _processingIds.add(order.id));
     try {
-      await _firestoreService.markDelivered(order.id, widget.currentUser.name);
+      await _firestoreService.markDelivered(
+        order.id,
+        widget.currentUser.name,
+        note: note,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Order marked as delivered.')),
@@ -112,11 +125,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                           title: Text(
                             'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                           ),
-                          subtitle: Text(
-                            order.items
-                                .map((i) => '${i.name} x${i.quantity}')
-                                .join(', '),
-                          ),
+                          subtitle: Text(orderItemsSummary(order.items)),
                           trailing: ElevatedButton(
                             onPressed: _processingIds.contains(order.id)
                                 ? null
@@ -153,11 +162,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                           title: Text(
                             'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                           ),
-                          subtitle: Text(
-                            order.items
-                                .map((i) => '${i.name} x${i.quantity}')
-                                .join(', '),
-                          ),
+                          subtitle: Text(orderItemsSummary(order.items)),
                           trailing: const Icon(
                             Icons.check_circle,
                             color: Colors.green,

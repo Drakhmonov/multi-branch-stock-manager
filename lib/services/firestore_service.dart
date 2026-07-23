@@ -153,6 +153,8 @@ class FirestoreService {
   Future<void> placeOrder({
     required String branchId,
     required List<OrderItem> items,
+    required String performedByName,
+    String? note,
   }) async {
     final orderRef = _db.collection('orders').doc();
     await orderRef.set(
@@ -162,6 +164,8 @@ class FirestoreService {
         items: items,
         status: OrderStatus.requested,
         createdAt: DateTime.now(),
+        placedByName: performedByName,
+        note: note,
       ).toMap(),
     );
   }
@@ -193,17 +197,25 @@ class FirestoreService {
   }
 
   /// Kitchen prepares an order: deducts central stock for each item, marks it preparing.
+  /// [editedItems] is the (possibly quantity-adjusted, possibly extended with
+  /// items not originally requested) list kitchen confirmed in the prepare
+  /// dialog — every line must already have `fulfilledQuantity` set. Stock is
+  /// deducted by `fulfilledQuantity`, not the original `quantity`, and the
+  /// edited list is persisted back onto the order so later steps (and the
+  /// detail view) see what was actually sent.
   /// Reads every item doc first, then writes — Firestore transactions
   /// reject any read that happens after a write in the same transaction,
   /// which an interleaved read/write-per-item loop hits as soon as an
   /// order has more than one item.
   Future<void> prepareOrder(
     OrderModel order,
+    List<OrderItem> editedItems,
     String performedBy,
-    String performedByName,
-  ) async {
+    String performedByName, {
+    String? note,
+  }) async {
     await _db.runTransaction((tx) async {
-      final itemRefs = order.items
+      final itemRefs = editedItems
           .map((item) => _db.collection('stockItems').doc(item.stockItemId))
           .toList();
       final itemSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
@@ -211,13 +223,14 @@ class FirestoreService {
         itemSnaps.add(await tx.get(ref));
       }
 
-      for (var i = 0; i < order.items.length; i++) {
-        final item = order.items[i];
+      for (var i = 0; i < editedItems.length; i++) {
+        final item = editedItems[i];
+        final fulfilledQty = item.fulfilledQuantity ?? item.quantity;
         final data = itemSnaps[i].data();
         final currentQty = (data?['currentQty'] ?? 0).toDouble();
         final cost = (data?['costPerUnit'] ?? 0).toDouble();
 
-        tx.update(itemRefs[i], {'currentQty': currentQty - item.quantity});
+        tx.update(itemRefs[i], {'currentQty': currentQty - fulfilledQty});
 
         final movementRef = _db.collection('stockMovements').doc();
         tx.set(
@@ -227,7 +240,7 @@ class FirestoreService {
             type: MovementType.orderDeducted,
             itemId: item.stockItemId,
             branchId: order.branchId,
-            quantity: item.quantity,
+            quantity: fulfilledQty,
             costAtTime: cost,
             performedBy: performedBy,
             relatedOrderId: order.id,
@@ -238,18 +251,25 @@ class FirestoreService {
 
       tx.update(_db.collection('orders').doc(order.id), {
         'status': OrderStatus.preparing.name,
+        'items': editedItems.map((i) => i.toMap()).toList(),
         'preparingAt': DateTime.now().toIso8601String(),
         'preparedByName': performedByName,
+        if (note != null && note.isNotEmpty) 'preparingNote': note,
       });
     });
   }
 
   /// Delivery marks an order as delivered.
-  Future<void> markDelivered(String orderId, String performedByName) async {
+  Future<void> markDelivered(
+    String orderId,
+    String performedByName, {
+    String? note,
+  }) async {
     await _db.collection('orders').doc(orderId).update({
       'status': OrderStatus.delivered.name,
       'deliveredAt': DateTime.now().toIso8601String(),
       'deliveredByName': performedByName,
+      if (note != null && note.isNotEmpty) 'deliveredNote': note,
     });
   }
 
@@ -259,8 +279,9 @@ class FirestoreService {
   Future<void> confirmReceived(
     OrderModel order,
     String performedBy,
-    String performedByName,
-  ) async {
+    String performedByName, {
+    String? note,
+  }) async {
     await _db.runTransaction((tx) async {
       final itemSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
       final stockSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
@@ -279,6 +300,7 @@ class FirestoreService {
 
       for (var i = 0; i < order.items.length; i++) {
         final item = order.items[i];
+        final fulfilledQty = item.fulfilledQuantity ?? item.quantity;
         final cost = (itemSnaps[i].data()?['costPerUnit'] ?? 0).toDouble();
         final currentQty = (stockSnaps[i].data()?['currentQty'] ?? 0)
             .toDouble();
@@ -286,7 +308,7 @@ class FirestoreService {
         tx.set(branchStockRefs[i], {
           'branchId': order.branchId,
           'itemId': item.stockItemId,
-          'currentQty': currentQty + item.quantity,
+          'currentQty': currentQty + fulfilledQty,
           'lastUpdated': DateTime.now().toIso8601String(),
         });
 
@@ -298,7 +320,7 @@ class FirestoreService {
             type: MovementType.received,
             itemId: item.stockItemId,
             branchId: order.branchId,
-            quantity: item.quantity,
+            quantity: fulfilledQty,
             costAtTime: cost,
             performedBy: performedBy,
             relatedOrderId: order.id,
@@ -311,6 +333,7 @@ class FirestoreService {
         'status': OrderStatus.received.name,
         'receivedAt': DateTime.now().toIso8601String(),
         'receivedByName': performedByName,
+        if (note != null && note.isNotEmpty) 'receivedNote': note,
       });
     });
   }

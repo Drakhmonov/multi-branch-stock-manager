@@ -344,3 +344,31 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 **Issues & resolutions:**
 - None — the Phase 10 rules gotcha (new fields need explicit allow-listing in `hasOnly`) was anticipated up front from reading the existing rules before writing the model changes, rather than being discovered by a failed write after the fact
 - As in Phase 14, the browser extension wasn't connected in this environment, so verification was `flutter analyze` + a compile/serve smoke test rather than a full click-through of the four-role order lifecycle; that manual walkthrough (place → prepare → deliver → confirm, checking the timeline fills in correctly at each stage from every role's screen) is still worth doing by hand
+
+-----------
+
+## Phase 16 — Orderer identity, per-step notes, and kitchen quantity adjustments
+**Dates:** 23 July 2026
+
+**Goal:** Extend Phase 15's order timeline with three related pieces flagged as natural follow-ons: who placed an order and any note they attached, an optional note kitchen/delivery/branch can leave at their own step, and — the one that actually changes behaviour — letting kitchen send a different quantity than was requested, or add an item that wasn't originally ordered, when they prepare it.
+
+**Completed:**
+- `OrderItem`: added nullable `fulfilledQuantity` — null until kitchen prepares the order, then set to whatever was actually sent (may differ from the original `quantity`). A kitchen-added item not on the original order is just a line with `quantity: 0` and a `fulfilledQuantity` set — no second list needed
+- `OrderModel`: added `placedByName` (denormalized at `placeOrder()` time, same pattern as Phase 15's `preparedByName`/etc., falling back to `'Unknown'` for pre-Phase-16 orders), `note` (the branch's note when placing), and `preparingNote`/`deliveredNote`/`receivedNote` (one per transition, mirroring the existing timestamp fields)
+- `FirestoreService.prepareOrder()` now takes the kitchen-edited item list rather than reading straight off the order, deducts central stock and logs `orderDeducted` movements by `fulfilledQuantity`, and persists the edited list back onto the order so later steps see what was actually sent. `confirmReceived()` switched the branch-stock increase and `received` movement quantity from `quantity` to `fulfilledQuantity ?? quantity`, so a branch's stock after confirming reflects what actually arrived, not what was originally asked for. `placeOrder()`/`markDelivered()`/`confirmReceived()` all gained an optional `note` param
+- `KitchenDashboardScreen`: replaced the one-tap "Prepare" button with a dialog (same `showDialog`/`StatefulBuilder` pattern as `StockCatalogScreen`'s Add/Restock/Edit dialogs) listing each requested item with an editable "sending" quantity defaulting to what was requested, an "Add item" control sourced from the stock catalog for anything not originally requested, and an optional note
+- Added a shared `showConfirmWithNoteDialog()` (`lib/widgets/confirm_with_note_dialog.dart`) — a small confirm-plus-optional-note dialog — used by `DeliveryScreen`'s "Mark Delivered" and `ReceiveDeliveryScreen`'s "Confirm Received", both previously one-tap actions
+- `BranchOrderScreen` gained an optional note field on the order form; the placing branch staff's name is now captured automatically
+- `OrderStatusTimeline`: each step now shows its note (in quotes, under the timestamp) when one was left; `order.note` renders on the Requested step
+- Lifted the order-items summary line — duplicated across `KitchenDashboardScreen`, `DeliveryScreen`, `ReceiveDeliveryScreen`, `ManagerDashboardScreen`'s Orders tab, and `order_detail_sheet.dart` (five copies) — into a shared `orderItemsSummary()` in `lib/utils/format.dart`, which also now shows "requested X, sent Y" wherever a fulfilled quantity differs from what was asked
+- `order_detail_sheet.dart` header now shows who placed the order
+- Updated `firestore.rules`: kitchen's `requested → preparing` transition's `hasOnly([...])` now also allows `items` and `preparingNote`; delivery's allows `deliveredNote`; branch's allows `receivedNote`. Redeployed via `firebase deploy --only firestore:rules`
+- Ran `flutter analyze` (clean) and a `flutter run -d chrome` smoke test (compiles, serves HTTP 200, no exceptions in the run log)
+
+**Decisions made:**
+- Kept a single `items` list with a `fulfilledQuantity` field per line, rather than two parallel "requested" and "fulfilled" lists — one row per item either way, and a kitchen-added item is just a natural edge case (`quantity: 0`) rather than a separate concept
+- Rules don't deep-validate that kitchen only changed `fulfilledQuantity` per line and left `stockItemId`/`name`/`quantity` alone — that would need Cloud Functions. Treated as consistent with the existing trust model rather than a new gap: kitchen already has direct write access to `stockItems` quantities
+- Notes are attached to the step they were entered at, not surfaced as a separate collection — matches the "status has to appear with the order" framing this whole timeline feature started from
+
+**Issues & resolutions:**
+- None. As in Phases 14–15, the browser extension wasn't connected in this environment, so verification stayed at `flutter analyze` + a compile/serve smoke test; a full manual walkthrough (place with a note → prepare with an adjusted quantity and an added item → deliver with a note → confirm with a note, checking the timeline and that branch stock reflects fulfilled rather than requested quantities) is still worth doing by hand

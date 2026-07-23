@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
+import '../widgets/confirm_with_note_dialog.dart';
 import '../widgets/stream_error_view.dart';
 import 'order_detail_sheet.dart';
 
@@ -26,12 +28,20 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
   final Set<String> _processingIds = {};
 
   Future<void> _handleConfirm(OrderModel order) async {
+    final note = await showConfirmWithNoteDialog(
+      context,
+      title: 'Confirm Received',
+      actionLabel: 'Confirm Received',
+    );
+    if (note == null) return;
+
     setState(() => _processingIds.add(order.id));
     try {
       await _firestoreService.confirmReceived(
         order,
         widget.currentUser.id,
         widget.currentUser.name,
+        note: note,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -56,9 +66,7 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
       color: color,
       child: ListTile(
         onTap: () => showOrderDetailSheet(context, initialOrder: order),
-        title: Text(
-          order.items.map((i) => '${i.name} x${i.quantity}').join(', '),
-        ),
+        title: Text(orderItemsSummary(order.items)),
         trailing: trailing,
       ),
     );

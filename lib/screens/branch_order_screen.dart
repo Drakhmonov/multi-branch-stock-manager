@@ -28,6 +28,7 @@ class _BranchOrderScreenState extends State<BranchOrderScreen> {
   late final Stream<List<StockItemModel>> _itemsStream = _firestoreService
       .streamStockItems();
   final Map<String, double> _requestedQuantities = {};
+  final _noteController = TextEditingController();
   bool _isSubmitting = false;
   String _searchQuery = '';
 
@@ -59,8 +60,15 @@ class _BranchOrderScreenState extends State<BranchOrderScreen> {
       await _firestoreService.placeOrder(
         branchId: widget.currentUser.branchId ?? 'unknown',
         items: orderItems,
+        performedByName: widget.currentUser.name,
+        note: _noteController.text.trim().isEmpty
+            ? null
+            : _noteController.text.trim(),
       );
-      setState(() => _requestedQuantities.clear());
+      setState(() {
+        _requestedQuantities.clear();
+        _noteController.clear();
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Order submitted successfully.')),
@@ -144,6 +152,14 @@ class _BranchOrderScreenState extends State<BranchOrderScreen> {
                         );
                       },
                     ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: TextField(
+                controller: _noteController,
+                decoration: const InputDecoration(labelText: 'Note (optional)'),
+                maxLines: 2,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(16.0),

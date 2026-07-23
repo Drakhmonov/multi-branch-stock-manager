@@ -78,21 +78,26 @@ service cloud.firestore {
 
       // Kitchen advances requested -> preparing; delivery advances preparing -> delivered;
       // the owning branch advances delivered -> received. Each transition may
-      // only touch the status field plus that step's own timestamp/actor-name fields.
+      // only touch the status field plus that step's own timestamp/actor-name/note
+      // fields. Kitchen's transition may also rewrite `items`, since preparing is
+      // when fulfilled quantities (which may differ from what was requested) and
+      // any kitchen-added items get recorded — deep per-line validation of that
+      // would need Cloud Functions, so this trusts kitchen the same way they're
+      // already trusted with direct write access to stockItems quantities.
       allow update: if isSignedIn() && (
         (myRole() == 'kitchenStaff' &&
           resource.data.status == 'requested' &&
           request.resource.data.status == 'preparing' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'preparingAt', 'preparedByName'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'items', 'preparingAt', 'preparedByName', 'preparingNote'])) ||
         (myRole() == 'delivery' &&
           resource.data.status == 'preparing' &&
           request.resource.data.status == 'delivered' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'deliveredAt', 'deliveredByName'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'deliveredAt', 'deliveredByName', 'deliveredNote'])) ||
         (myRole() == 'branchStaff' &&
           resource.data.branchId == myBranchId() &&
           resource.data.status == 'delivered' &&
           request.resource.data.status == 'received' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'receivedAt', 'receivedByName']))
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'receivedAt', 'receivedByName', 'receivedNote']))
       );
 
       allow delete: if false;

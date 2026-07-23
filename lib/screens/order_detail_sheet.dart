@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
 import '../widgets/order_status_timeline.dart';
 import '../widgets/stream_error_view.dart';
 
@@ -65,11 +66,14 @@ class _OrderDetailSheet extends StatelessWidget {
                     branchName != null ? 'Order — $branchName' : 'Order',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    order.items
-                        .map((i) => '${i.name} x${i.quantity}')
-                        .join(', '),
+                    'Placed by ${order.placedByName}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    orderItemsSummary(order.items),
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 20),
