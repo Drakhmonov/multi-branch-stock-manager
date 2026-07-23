@@ -3,7 +3,13 @@ import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 import '../widgets/stream_error_view.dart';
+import 'order_detail_sheet.dart';
 
+/// Branch staff's view of every order they've placed, across its whole
+/// lifecycle — not just the ones awaiting confirmation. Previously this
+/// screen only showed delivered/received orders, so a branch had no way to
+/// tell whether a just-placed order was still sitting requested or already
+/// being prepared.
 class ReceiveDeliveryScreen extends StatefulWidget {
   final UserModel currentUser;
 
@@ -22,7 +28,11 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
   Future<void> _handleConfirm(OrderModel order) async {
     setState(() => _processingIds.add(order.id));
     try {
-      await _firestoreService.confirmReceived(order, widget.currentUser.id);
+      await _firestoreService.confirmReceived(
+        order,
+        widget.currentUser.id,
+        widget.currentUser.name,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -41,6 +51,19 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
     }
   }
 
+  Widget _orderCard(OrderModel order, {Color? color, Widget? trailing}) {
+    return Card(
+      color: color,
+      child: ListTile(
+        onTap: () => showOrderDetailSheet(context, initialOrder: order),
+        title: Text(
+          order.items.map((i) => '${i.name} x${i.quantity}').join(', '),
+        ),
+        trailing: trailing,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<OrderModel>>(
@@ -53,22 +76,22 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
           return StreamErrorView(error: snapshot.error);
         }
 
-        final relevant = (snapshot.data ?? [])
-            .where(
-              (o) =>
-                  o.status == OrderStatus.delivered ||
-                  o.status == OrderStatus.received,
-            )
-            .toList();
+        final orders = snapshot.data ?? [];
 
-        if (relevant.isEmpty) {
-          return const Center(child: Text('No order.'));
+        if (orders.isEmpty) {
+          return const Center(child: Text('No orders yet.'));
         }
 
-        final toReceive = relevant
+        final requested = orders
+            .where((o) => o.status == OrderStatus.requested)
+            .toList();
+        final preparing = orders
+            .where((o) => o.status == OrderStatus.preparing)
+            .toList();
+        final toReceive = orders
             .where((o) => o.status == OrderStatus.delivered)
             .toList();
-        final received = relevant
+        final received = orders
             .where((o) => o.status == OrderStatus.received)
             .toList();
 
@@ -76,32 +99,43 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
           padding: const EdgeInsets.all(12),
           children: [
             Text(
+              'Requested (${requested.length})',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            if (requested.isEmpty) const Text('Nothing requested.'),
+            ...requested.map((order) => _orderCard(order)),
+            const SizedBox(height: 24),
+            Text(
+              'Preparing (${preparing.length})',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            if (preparing.isEmpty) const Text('Nothing in preparation.'),
+            ...preparing.map(
+              (order) => _orderCard(order, color: Colors.amber[50]),
+            ),
+            const SizedBox(height: 24),
+            Text(
               'Receive Order (${toReceive.length})',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             if (toReceive.isEmpty) const Text('No order.'),
             ...toReceive.map(
-              (order) => Card(
-                child: ListTile(
-                  title: Text(
-                    order.items
-                        .map((i) => '${i.name} x${i.quantity}')
-                        .join(', '),
-                  ),
-                  subtitle: const Text('Delivered — awaiting confirmation'),
-                  trailing: ElevatedButton(
-                    onPressed: _processingIds.contains(order.id)
-                        ? null
-                        : () => _handleConfirm(order),
-                    child: _processingIds.contains(order.id)
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Confirm Received'),
-                  ),
+              (order) => _orderCard(
+                order,
+                trailing: ElevatedButton(
+                  onPressed: _processingIds.contains(order.id)
+                      ? null
+                      : () => _handleConfirm(order),
+                  child: _processingIds.contains(order.id)
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Confirm Received'),
                 ),
               ),
             ),
@@ -113,17 +147,10 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
             const SizedBox(height: 8),
             if (received.isEmpty) const Text('No order.'),
             ...received.map(
-              (order) => Card(
+              (order) => _orderCard(
+                order,
                 color: Colors.green[50],
-                child: ListTile(
-                  title: Text(
-                    order.items
-                        .map((i) => '${i.name} x${i.quantity}')
-                        .join(', '),
-                  ),
-                  subtitle: const Text('Received — stock updated'),
-                  trailing: const Icon(Icons.check_circle, color: Colors.green),
-                ),
+                trailing: const Icon(Icons.check_circle, color: Colors.green),
               ),
             ),
           ],

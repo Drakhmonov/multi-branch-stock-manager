@@ -183,12 +183,25 @@ class FirestoreService {
     );
   }
 
+  /// Live view of a single order, for the order detail sheet — keeps
+  /// updating in real time independent of whatever list stream is driving
+  /// the screen it was opened from.
+  Stream<OrderModel?> streamOrder(String orderId) {
+    return _db.collection('orders').doc(orderId).snapshots().map(
+      (doc) => doc.exists ? OrderModel.fromMap(doc.id, doc.data()!) : null,
+    );
+  }
+
   /// Kitchen prepares an order: deducts central stock for each item, marks it preparing.
   /// Reads every item doc first, then writes — Firestore transactions
   /// reject any read that happens after a write in the same transaction,
   /// which an interleaved read/write-per-item loop hits as soon as an
   /// order has more than one item.
-  Future<void> prepareOrder(OrderModel order, String performedBy) async {
+  Future<void> prepareOrder(
+    OrderModel order,
+    String performedBy,
+    String performedByName,
+  ) async {
     await _db.runTransaction((tx) async {
       final itemRefs = order.items
           .map((item) => _db.collection('stockItems').doc(item.stockItemId))
@@ -225,21 +238,29 @@ class FirestoreService {
 
       tx.update(_db.collection('orders').doc(order.id), {
         'status': OrderStatus.preparing.name,
+        'preparingAt': DateTime.now().toIso8601String(),
+        'preparedByName': performedByName,
       });
     });
   }
 
   /// Delivery marks an order as delivered.
-  Future<void> markDelivered(String orderId) async {
+  Future<void> markDelivered(String orderId, String performedByName) async {
     await _db.collection('orders').doc(orderId).update({
       'status': OrderStatus.delivered.name,
+      'deliveredAt': DateTime.now().toIso8601String(),
+      'deliveredByName': performedByName,
     });
   }
 
   /// Branch confirms receipt: increases branch stock, logs a movement at
   /// current item cost. Same all-reads-then-all-writes structure as
   /// [prepareOrder], for the same reason.
-  Future<void> confirmReceived(OrderModel order, String performedBy) async {
+  Future<void> confirmReceived(
+    OrderModel order,
+    String performedBy,
+    String performedByName,
+  ) async {
     await _db.runTransaction((tx) async {
       final itemSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
       final stockSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
@@ -288,6 +309,8 @@ class FirestoreService {
 
       tx.update(_db.collection('orders').doc(order.id), {
         'status': OrderStatus.received.name,
+        'receivedAt': DateTime.now().toIso8601String(),
+        'receivedByName': performedByName,
       });
     });
   }

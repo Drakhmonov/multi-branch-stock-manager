@@ -3,6 +3,7 @@ import '../models/stock_item_model.dart';
 import '../models/stock_movement_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
 import '../widgets/stream_error_view.dart';
 
 String _labelFor(MovementType type) {
@@ -37,11 +38,6 @@ IconData _iconFor(MovementType type) {
     default:
       return Icons.swap_horiz;
   }
-}
-
-String _formatTimestamp(DateTime t) {
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
 }
 
 class BranchHistoryScreen extends StatefulWidget {
@@ -244,8 +240,8 @@ class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
                         title: Text('${_labelFor(m.type)}: $itemLabel'),
                         subtitle: Text(
                           m.note != null && m.note!.isNotEmpty
-                              ? '${_formatTimestamp(m.timestamp)}\n${m.note}'
-                              : _formatTimestamp(m.timestamp),
+                              ? '${formatTimestamp(m.timestamp)}\n${m.note}'
+                              : formatTimestamp(m.timestamp),
                         ),
                         isThreeLine: m.note != null && m.note!.isNotEmpty,
                         trailing: Text(signedQty),

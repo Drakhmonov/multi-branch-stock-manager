@@ -77,21 +77,22 @@ service cloud.firestore {
         request.resource.data.status == 'requested';
 
       // Kitchen advances requested -> preparing; delivery advances preparing -> delivered;
-      // the owning branch advances delivered -> received. Only the status field may change.
+      // the owning branch advances delivered -> received. Each transition may
+      // only touch the status field plus that step's own timestamp/actor-name fields.
       allow update: if isSignedIn() && (
         (myRole() == 'kitchenStaff' &&
           resource.data.status == 'requested' &&
           request.resource.data.status == 'preparing' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'preparingAt', 'preparedByName'])) ||
         (myRole() == 'delivery' &&
           resource.data.status == 'preparing' &&
           request.resource.data.status == 'delivered' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'deliveredAt', 'deliveredByName'])) ||
         (myRole() == 'branchStaff' &&
           resource.data.branchId == myBranchId() &&
           resource.data.status == 'delivered' &&
           request.resource.data.status == 'received' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'receivedAt', 'receivedByName']))
       );
 
       allow delete: if false;

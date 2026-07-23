@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/responsive_body.dart';
 import '../widgets/stream_error_view.dart';
+import 'order_detail_sheet.dart';
 
 class DeliveryScreen extends StatefulWidget {
   final UserModel currentUser;
@@ -31,7 +32,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   Future<void> _handleDeliver(OrderModel order) async {
     setState(() => _processingIds.add(order.id));
     try {
-      await _firestoreService.markDelivered(order.id);
+      await _firestoreService.markDelivered(order.id, widget.currentUser.name);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Order marked as delivered.')),
@@ -103,6 +104,11 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                     ...readyForDelivery.map(
                       (order) => Card(
                         child: ListTile(
+                          onTap: () => showOrderDetailSheet(
+                            context,
+                            initialOrder: order,
+                            branchName: branchNames[order.branchId],
+                          ),
                           title: Text(
                             'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                           ),
@@ -139,6 +145,11 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                       (order) => Card(
                         color: Colors.green[50],
                         child: ListTile(
+                          onTap: () => showOrderDetailSheet(
+                            context,
+                            initialOrder: order,
+                            branchName: branchNames[order.branchId],
+                          ),
                           title: Text(
                             'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                           ),

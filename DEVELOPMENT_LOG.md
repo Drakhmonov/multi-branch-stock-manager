@@ -314,3 +314,33 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - The Claude Code browser extension wasn't connected in this environment, so the usual click-through UI verification wasn't possible. Substituted `flutter analyze` plus a `flutter run -d chrome` smoke test (server compiles, serves HTTP 200, no exceptions in the run log) as a lower-confidence stand-in; a full manual walkthrough of the error paths (e.g. temporarily pointing a stream at a nonexistent collection) is still worth doing by hand before relying on this in the dissertation write-up
+
+-----------
+
+## Phase 15 — Order status timeline & unified order visibility
+**Dates:** 23 July 2026
+
+**Goal:** An order's journey (requested → preparing → delivered → received) was scattered and one-directional — `OrderModel` only ever stored `status` and `createdAt`, so there was no record of when each later step happened or who did it, and no single screen showed a order's whole progression. Worse, branch staff had no screen at all showing an order between "I placed it" and "it's been delivered": `BranchOrderScreen` only places new orders, and the old `ReceiveDeliveryScreen` only showed delivered/received ones. Add real-time status with per-step timestamps, visible with the order itself rather than a separate history screen, across all four roles including the manager dashboard.
+
+**Completed:**
+- `OrderModel`: added `preparingAt`/`preparedByName`, `deliveredAt`/`deliveredByName`, `receivedAt`/`receivedByName` (all nullable, so existing orders without them still deserialize). Timestamps stored as ISO8601 strings, matching how `createdAt` already worked in this model
+- `FirestoreService`: `prepareOrder()`, `markDelivered()` (previously took no actor at all), and `confirmReceived()` now record each transition's timestamp and the acting user's display name alongside the status change; added `streamOrder(orderId)` for a live single-document subscription
+- Deliberately denormalized the actor's **name** rather than uid onto the order doc — `users/{uid}` docs are locked to self-read-only in `firestore.rules`, so no other role could resolve a uid to a name anyway, and the uid-level audit trail already exists via `stockMovements.performedBy` linked through `relatedOrderId`. Avoided a rules change to `users` or a new cross-user lookup entirely
+- Added `OrderStatusTimeline` (`lib/widgets/order_status_timeline.dart`): a vertical stepper showing all four steps, with timestamp + "by {name}" for steps reached and a greyed-out marker for steps not yet reached
+- Added `showOrderDetailSheet()` (`lib/screens/order_detail_sheet.dart`): a live-updating bottom sheet (via `streamOrder`) showing the item list plus the timeline; every order card across the app now opens this on tap
+- Broadened `ReceiveDeliveryScreen` from "delivered + received only" to stream and show **all** of a branch's orders, grouped into Requested/Preparing/Receive Order/Received Order sections — this is the piece that actually closes the branch-visibility gap. Renamed its `BranchHomeScreen` destination label from "Receive" to "Orders" to match
+- Added an "Orders" destination to `ManagerDashboardScreen` (`_ManagerOrdersBody`): every order across all branches, status-tinted, tappable to the same detail sheet
+- Made every existing order card in `KitchenDashboardScreen` and `DeliveryScreen` tappable to the detail sheet too, without changing their existing status-filtered queue sections (still useful as an action queue for those roles)
+- Lifted the timestamp formatter that `BranchHistoryScreen` had locally (`_formatTimestamp`) into a shared `lib/utils/format.dart`, now used by both it and the new timeline widget, rather than writing a third copy
+- Updated `firestore.rules`: each order-status transition's `hasOnly([...])` field allow-list now includes that step's new timestamp/name fields (previously `['status']` only) — otherwise the new writes would have been silently rejected, the same class of gap as Phase 10's `resource == null` miss. Redeployed via `firebase deploy --only firestore:rules`
+- Ran `flutter analyze` (clean) and a `flutter run -d chrome` smoke test (compiles, serves HTTP 200, no exceptions in the run log)
+
+**Decisions made:**
+- Real-time was free — every screen already streams from Firestore, so no extra work was needed beyond persisting the per-step data; this phase is purely about data model + display
+- Kitchen and delivery keep their existing status-grouped sections rather than switching to a flat "all orders" list like the branch/manager views — those groupings are genuinely how those roles work through a queue, and the full timeline is one tap away regardless
+- Notifications (push or in-app) for status changes are explicitly out of scope for this phase, per the user's own framing of it as a later step. True push notifications while the app is closed would need Cloud Functions + FCM, which conflicts with the Phase 0/2 decision to avoid Cloud Functions for billing-risk reasons on the Spark plan — noted as a trade-off to revisit explicitly when that work is picked up, not assumed
+- `OrderStatus.cancelled` remains defined but unused (never set anywhere in the app); left untouched
+
+**Issues & resolutions:**
+- None — the Phase 10 rules gotcha (new fields need explicit allow-listing in `hasOnly`) was anticipated up front from reading the existing rules before writing the model changes, rather than being discovered by a failed write after the fact
+- As in Phase 14, the browser extension wasn't connected in this environment, so verification was `flutter analyze` + a compile/serve smoke test rather than a full click-through of the four-role order lifecycle; that manual walkthrough (place → prepare → deliver → confirm, checking the timeline fills in correctly at each stage from every role's screen) is still worth doing by hand

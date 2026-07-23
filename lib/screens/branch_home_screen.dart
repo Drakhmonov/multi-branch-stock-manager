@@ -40,7 +40,7 @@ class BranchHomeScreen extends StatelessWidget {
                   BranchOrderScreen(currentUser: currentUser),
             ),
             NavDestination(
-              label: 'Receive',
+              label: 'Orders',
               icon: Icons.local_shipping,
               contentBuilder: (_) =>
                   ReceiveDeliveryScreen(currentUser: currentUser),

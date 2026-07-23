@@ -30,6 +30,12 @@ class OrderModel {
   final List<OrderItem> items;
   final OrderStatus status;
   final DateTime createdAt;
+  final DateTime? preparingAt;
+  final String? preparedByName;
+  final DateTime? deliveredAt;
+  final String? deliveredByName;
+  final DateTime? receivedAt;
+  final String? receivedByName;
 
   OrderModel({
     required this.id,
@@ -37,6 +43,12 @@ class OrderModel {
     required this.items,
     required this.status,
     required this.createdAt,
+    this.preparingAt,
+    this.preparedByName,
+    this.deliveredAt,
+    this.deliveredByName,
+    this.receivedAt,
+    this.receivedByName,
   });
 
   Map<String, dynamic> toMap() => {
@@ -44,6 +56,12 @@ class OrderModel {
     'items': items.map((i) => i.toMap()).toList(),
     'status': status.name,
     'createdAt': createdAt.toIso8601String(),
+    if (preparingAt != null) 'preparingAt': preparingAt!.toIso8601String(),
+    if (preparedByName != null) 'preparedByName': preparedByName,
+    if (deliveredAt != null) 'deliveredAt': deliveredAt!.toIso8601String(),
+    if (deliveredByName != null) 'deliveredByName': deliveredByName,
+    if (receivedAt != null) 'receivedAt': receivedAt!.toIso8601String(),
+    if (receivedByName != null) 'receivedByName': receivedByName,
   };
 
   factory OrderModel.fromMap(String id, Map<String, dynamic> map) => OrderModel(
@@ -57,5 +75,17 @@ class OrderModel {
       orElse: () => OrderStatus.requested,
     ),
     createdAt: DateTime.parse(map['createdAt']),
+    preparingAt: map['preparingAt'] != null
+        ? DateTime.parse(map['preparingAt'])
+        : null,
+    preparedByName: map['preparedByName'],
+    deliveredAt: map['deliveredAt'] != null
+        ? DateTime.parse(map['deliveredAt'])
+        : null,
+    deliveredByName: map['deliveredByName'],
+    receivedAt: map['receivedAt'] != null
+        ? DateTime.parse(map['receivedAt'])
+        : null,
+    receivedByName: map['receivedByName'],
   );
 }

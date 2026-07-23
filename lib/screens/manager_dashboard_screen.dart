@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../models/stock_movement_model.dart';
 import '../services/auth_service.dart';
@@ -6,6 +7,7 @@ import '../services/firestore_service.dart';
 import '../widgets/adaptive_nav_shell.dart';
 import '../widgets/stream_error_view.dart';
 import 'branch_management_screen.dart';
+import 'order_detail_sheet.dart';
 
 enum _Period { today, week, month, all }
 
@@ -32,6 +34,11 @@ class ManagerDashboardScreen extends StatelessWidget {
           label: 'Dashboard',
           icon: Icons.dashboard,
           contentBuilder: (_) => const _ManagerDashboardBody(),
+        ),
+        NavDestination(
+          label: 'Orders',
+          icon: Icons.receipt_long,
+          contentBuilder: (_) => const _ManagerOrdersBody(),
         ),
         NavDestination(
           label: 'Branches',
@@ -206,6 +213,104 @@ class _ManagerDashboardBodyState extends State<_ManagerDashboardBody> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ManagerOrdersBody extends StatefulWidget {
+  const _ManagerOrdersBody();
+
+  @override
+  State<_ManagerOrdersBody> createState() => _ManagerOrdersBodyState();
+}
+
+class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
+  final _firestoreService = FirestoreService();
+  late final Stream<Map<String, String>> _branchNamesStream = _firestoreService
+      .streamBranchNames();
+  late final Stream<List<OrderModel>> _ordersStream = _firestoreService
+      .streamOrders();
+
+  String _statusLabel(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.requested:
+        return 'Requested';
+      case OrderStatus.preparing:
+        return 'Preparing';
+      case OrderStatus.delivered:
+        return 'Delivered';
+      case OrderStatus.received:
+        return 'Received';
+      case OrderStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  Color? _statusColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.preparing:
+        return Colors.amber[50];
+      case OrderStatus.delivered:
+        return Colors.blue[50];
+      case OrderStatus.received:
+        return Colors.green[50];
+      case OrderStatus.requested:
+      case OrderStatus.cancelled:
+        return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Map<String, String>>(
+      stream: _branchNamesStream,
+      builder: (context, branchSnapshot) {
+        final branchNames = branchSnapshot.data ?? <String, String>{};
+
+        return StreamBuilder<List<OrderModel>>(
+          stream: _ordersStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return StreamErrorView(error: snapshot.error);
+            }
+
+            final orders = snapshot.data ?? [];
+            if (orders.isEmpty) {
+              return const Center(child: Text('No orders yet.'));
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: orders.length,
+              itemBuilder: (context, index) {
+                final order = orders[index];
+                final branchName = branchNames[order.branchId] ?? order.branchId;
+                return Card(
+                  color: _statusColor(order.status),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    onTap: () => showOrderDetailSheet(
+                      context,
+                      initialOrder: order,
+                      branchName: branchName,
+                    ),
+                    title: Text(branchName),
+                    subtitle: Text(
+                      order.items
+                          .map((i) => '${i.name} x${i.quantity}')
+                          .join(', '),
+                    ),
+                    trailing: Text(_statusLabel(order.status)),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

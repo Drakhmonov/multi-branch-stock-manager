@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/adaptive_nav_shell.dart';
 import '../widgets/stream_error_view.dart';
+import 'order_detail_sheet.dart';
 import 'stock_catalog_screen.dart';
 
 class KitchenDashboardScreen extends StatelessWidget {
@@ -61,7 +62,11 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
   Future<void> _handlePrepare(OrderModel order) async {
     setState(() => _processingIds.add(order.id));
     try {
-      await _firestoreService.prepareOrder(order, widget.currentUser.id);
+      await _firestoreService.prepareOrder(
+        order,
+        widget.currentUser.id,
+        widget.currentUser.name,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -119,6 +124,11 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                 ...requested.map(
                   (order) => Card(
                     child: ListTile(
+                      onTap: () => showOrderDetailSheet(
+                        context,
+                        initialOrder: order,
+                        branchName: branchNames[order.branchId],
+                      ),
                       title: Text(
                         'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                       ),
@@ -155,6 +165,11 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                   (order) => Card(
                     color: Colors.amber[50],
                     child: ListTile(
+                      onTap: () => showOrderDetailSheet(
+                        context,
+                        initialOrder: order,
+                        branchName: branchNames[order.branchId],
+                      ),
                       title: Text(
                         'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                       ),
