@@ -254,3 +254,43 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 - The sign-up screen's branch dropdown initially came back empty even though branches existed in Firestore: `streamBranches()` requires `isSignedIn()` per the original rule, but a new user isn't authenticated yet at sign-up time, so the read silently failed and the dropdown had nothing to show — the same "stream fails silently, UI doesn't check `hasError`" class of bug flagged back in Phase 9. Fixed by making `branches` reads public, since branch names/locations aren't sensitive and a pre-signup user has no other way to see them
 - "Create an account" originally used `Navigator.push` to show the sign-up screen on top of the login screen. On success, the app's top-level auth state updated correctly underneath, but the pushed route stayed on top of the navigator stack, so the screen never visibly changed — the user had no confirmation and, on retrying, hit "email already in use" from their first (actually successful) attempt. Fixed by making sign-up a top-level sibling of the login screen (matching how `main.dart` already switches screens on role), removing the stale route entirely, and adding an explicit "Account created" `SnackBar` via a `ScaffoldMessengerKey` that survives the screen swap
 - Twice during this phase, edits made to the running `flutter run` session weren't reflected in the browser — `flutter run` requires an explicit hot reload/restart trigger that isn't available when driven through a non-interactive background shell. Resolved by killing and relaunching the dev process after each batch of changes; worth automating properly (e.g. a VM service hot-reload call) if this keeps coming up
+
+-----------
+
+## Phase 12 — Responsive layout & adaptive navigation
+**Dates:** 22 July 2026
+
+**Goal:** Make the app read as a real mobile/web app rather than a single mobile screen stretched onto a browser tab — width-constrained content on wide viewports, and a persistent adaptive nav shell for the multi-screen roles instead of push/back navigation.
+
+**Completed:**
+- Added `ResponsiveBody` (`lib/widgets/responsive_body.dart`): centers content and caps its width on wide viewports; used across every screen (narrower for the login/sign-up forms, wider for lists/dashboards)
+- Added `AdaptiveNavShell` (`lib/widgets/adaptive_nav_shell.dart`): the standard Material 3 adaptive scaffold — a `NavigationRail` above a 700dp breakpoint, a bottom `NavigationBar` below it — with a two-line app bar title (destination name + branch/user context) and a sign-out action
+- Rebuilt `BranchHomeScreen` (4 destinations: Order/Receive/Daily Update/History) and `ManagerDashboardScreen` (Dashboard/Branches) on top of the shell, replacing their old tile-list-plus-push-navigation and icon-button-to-a-pushed-screen patterns respectively; `KitchenDashboardScreen` later gained a second destination the same way in Phase 13
+- Added a sign-out action (there was previously no way to log out of the app at all — `AuthService.signOut()` existed but nothing called it), wired through `main.dart` back to the login screen
+
+**Decisions made:**
+- Single 700dp breakpoint (not Material's full 3-tier window-size-class system) — enough for a two-mode rail/bottom-nav swap without over-engineering for this app's scope
+
+**Issues & resolutions:**
+- None beyond the general `flutter run` hot-reload friction already noted in Phase 11 (recurring throughout the session — resolved the same way, by killing and relaunching)
+
+-----------
+
+## Phase 13 — Packaged stock items, kitchen catalog management, and follow-on fixes
+**Dates:** 22-23 July 2026
+
+**Goal:** Support real kitchen items that come in packs/containers (dumplings in bags, oil in 20L cans, chilli oil in packs of 6) rather than a single flat unit, and give kitchen staff an actual UI to add/restock/edit/remove catalog items — `addStockItem()` and `restock()` had existed since Phase 4 but nothing had ever called them.
+
+**Completed:**
+- `StockItemModel`: renamed `unit` → `pieceUnit`, added `packLabel`/`piecesPerPack`/`costPerPack`; `costPerUnit` (cost per piece) stays the value every ledger/report calculation already used, now derived from `costPerPack / piecesPerPack` — kept orders, deliveries, and the underlying ledger entirely in pieces, so only the catalog/restock layer needed to become pack-aware
+- Added `StockCatalogScreen` (kitchen): search, full item detail (pack composition, stock in pieces *and* packs, cost, low-stock tint using the `reorderThreshold` field that had sat unused since Phase 3), and Add/Restock/Edit/Delete actions backed by new/updated `FirestoreService` methods (`addStockItem`, `restock`, `updateStockItemDetails`, `deleteStockItem`)
+- Extended the adaptive shell from Phase 12 to `KitchenDashboardScreen` (Orders + Stock Catalog destinations)
+- Added a search bar to `BranchOrderScreen`
+- Extended pack-awareness to where branch staff actually interact with packaged items: `BranchOrderScreen` ("Available centrally" and the order quantity field show/accept packs, e.g. bags) and `DailyStockUpdateScreen` ("Currently held" and Sold/Wasted fields do the same) — both convert to pieces before touching Firestore, so the ledger and every report stay exactly as precise as before (still logging in individual pieces, per the original design choice for this screen)
+
+**Decisions made:**
+- Orders/deliveries/daily-usage stay in pieces internally always; packs are purely a UI convenience layered on top (input and display convert to/from pieces), not a second unit tracked through the system — kept the blast radius to the catalog/restock layer plus a thin conversion at each branch-facing input
+
+**Issues & resolutions:**
+- The new search bars on `BranchOrderScreen`/`StockCatalogScreen` initially made typing impossible — no characters would appear, backspace didn't work, and focus dropped after every keystroke. Root cause: every screen's `StreamBuilder` called `_firestoreService.streamXxx()` directly inside `build()`, creating a brand-new `Stream` object on every rebuild; the search field's `onChanged` called `setState` on every keystroke, so each keystroke recreated the stream, which reset `StreamBuilder` to its loading state and tore down the whole subtree — including the text field being typed into. Fixed by caching every such stream once (`late final` field) instead of recreating it in `build()`, across every screen with this pattern, not just the two with search bars
+- Preparing or confirming an order with more than one line item failed with a Firestore transaction error; single-item orders worked fine. Root cause: `prepareOrder()` and `confirmReceived()` looped over the order's items doing a read then writes per item — Firestore transactions require every read in a transaction to happen before any write, and the second item's read came after the first item's writes. Fixed by restructuring both methods into two passes: read every item doc first, then perform all the writes

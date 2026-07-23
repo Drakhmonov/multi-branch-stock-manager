@@ -11,6 +11,8 @@ class BranchManagementScreen extends StatefulWidget {
 
 class _BranchManagementScreenState extends State<BranchManagementScreen> {
   final _firestoreService = FirestoreService();
+  late final Stream<List<BranchModel>> _branchesStream = _firestoreService
+      .streamBranches();
 
   Future<void> _showAddBranchDialog() async {
     final nameController = TextEditingController();
@@ -94,41 +96,55 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Branch Management')),
-      body: StreamBuilder<List<BranchModel>>(
-        stream: _firestoreService.streamBranches(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text('No branches yet. Add one to get started.'),
-            );
-          }
-
-          final branches = snapshot.data!
-            ..sort((a, b) => a.name.compareTo(b.name));
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: branches.length,
-            itemBuilder: (context, index) {
-              final branch = branches[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: const Icon(Icons.store),
-                  title: Text(branch.name),
-                  subtitle: Text(branch.location),
-                ),
-              );
-            },
+    return StreamBuilder<List<BranchModel>>(
+      stream: _branchesStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Stack(
+            children: [
+              const Center(
+                child: Text('No branches yet. Add one to get started.'),
+              ),
+              _buildFab(),
+            ],
           );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
+        }
+
+        final branches = snapshot.data!
+          ..sort((a, b) => a.name.compareTo(b.name));
+
+        return Stack(
+          children: [
+            ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+              itemCount: branches.length,
+              itemBuilder: (context, index) {
+                final branch = branches[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: const Icon(Icons.store),
+                    title: Text(branch.name),
+                    subtitle: Text(branch.location),
+                  ),
+                );
+              },
+            ),
+            _buildFab(),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildFab() {
+    return Positioned(
+      right: 16,
+      bottom: 16,
+      child: FloatingActionButton(
         onPressed: _showAddBranchDialog,
         child: const Icon(Icons.add),
       ),

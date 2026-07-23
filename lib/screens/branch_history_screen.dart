@@ -54,6 +54,12 @@ class BranchHistoryScreen extends StatefulWidget {
 
 class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
   final _firestoreService = FirestoreService();
+  late final Stream<List<StockItemModel>> _itemsStream = _firestoreService
+      .streamStockItems();
+  late final Stream<List<StockMovementModel>> _movementsStream =
+      _firestoreService.streamMovements(
+        branchId: widget.currentUser.branchId ?? 'unknown',
+      );
 
   Future<void> _showCorrectionDialog(List<StockItemModel> items) async {
     if (items.isEmpty) return;
@@ -188,73 +194,66 @@ class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final branchId = widget.currentUser.branchId ?? 'unknown';
+    return StreamBuilder<List<StockItemModel>>(
+      stream: _itemsStream,
+      builder: (context, itemsSnapshot) {
+        final items = itemsSnapshot.data ?? <StockItemModel>[];
+        final itemNames = {
+          for (final i in items) i.id: '${i.name} (${i.pieceUnit})',
+        };
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Branch History')),
-      body: StreamBuilder<List<StockItemModel>>(
-        stream: _firestoreService.streamStockItems(),
-        builder: (context, itemsSnapshot) {
-          final items = itemsSnapshot.data ?? <StockItemModel>[];
-          final itemNames = {
-            for (final i in items) i.id: '${i.name} (${i.unit})',
-          };
-
-          return StreamBuilder<List<StockMovementModel>>(
-            stream: _firestoreService.streamMovements(branchId: branchId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Stack(
-                  children: [
-                    const Center(child: Text('No activity logged yet.')),
-                    _buildFab(items),
-                  ],
-                );
-              }
-
-              final movements = List.of(snapshot.data!)
-                ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
+        return StreamBuilder<List<StockMovementModel>>(
+          stream: _movementsStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return Stack(
                 children: [
-                  ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
-                    itemCount: movements.length,
-                    itemBuilder: (context, index) {
-                      final m = movements[index];
-                      final itemLabel = itemNames[m.itemId] ?? m.itemId;
-                      final signedQty = m.type == MovementType.adjustment
-                          ? (m.quantity > 0
-                                ? '+${m.quantity}'
-                                : '${m.quantity}')
-                          : '${m.quantity}';
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: Icon(_iconFor(m.type)),
-                          title: Text('${_labelFor(m.type)}: $itemLabel'),
-                          subtitle: Text(
-                            m.note != null && m.note!.isNotEmpty
-                                ? '${_formatTimestamp(m.timestamp)}\n${m.note}'
-                                : _formatTimestamp(m.timestamp),
-                          ),
-                          isThreeLine: m.note != null && m.note!.isNotEmpty,
-                          trailing: Text(signedQty),
-                        ),
-                      );
-                    },
-                  ),
+                  const Center(child: Text('No activity logged yet.')),
                   _buildFab(items),
                 ],
               );
-            },
-          );
-        },
-      ),
+            }
+
+            final movements = List.of(snapshot.data!)
+              ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+            return Stack(
+              children: [
+                ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+                  itemCount: movements.length,
+                  itemBuilder: (context, index) {
+                    final m = movements[index];
+                    final itemLabel = itemNames[m.itemId] ?? m.itemId;
+                    final signedQty = m.type == MovementType.adjustment
+                        ? (m.quantity > 0 ? '+${m.quantity}' : '${m.quantity}')
+                        : '${m.quantity}';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(_iconFor(m.type)),
+                        title: Text('${_labelFor(m.type)}: $itemLabel'),
+                        subtitle: Text(
+                          m.note != null && m.note!.isNotEmpty
+                              ? '${_formatTimestamp(m.timestamp)}\n${m.note}'
+                              : _formatTimestamp(m.timestamp),
+                        ),
+                        isThreeLine: m.note != null && m.note!.isNotEmpty,
+                        trailing: Text(signedQty),
+                      ),
+                    );
+                  },
+                ),
+                _buildFab(items),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

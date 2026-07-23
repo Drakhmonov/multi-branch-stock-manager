@@ -7,7 +7,8 @@ class BranchModel {
 
   Map<String, dynamic> toMap() => {'name': name, 'location': location};
 
-  factory BranchModel.fromMap(String id, Map<String, dynamic> map) => BranchModel(
+  factory BranchModel.fromMap(String id, Map<String, dynamic> map) =>
+      BranchModel(
         id: id,
         name: map['name'] ?? '',
         location: map['location'] ?? '',

@@ -50,15 +50,66 @@ class FirestoreService {
         );
   }
 
-  Future<void> addStockItem(StockItemModel item) async {
-    await _db.collection('stockItems').doc(item.id).set(item.toMap());
+  /// Adds a new catalog item. [initialPacks] (default 0) seeds central stock
+  /// via the pack composition, same conversion [restock] uses.
+  Future<void> addStockItem({
+    required String name,
+    required String pieceUnit,
+    required String packLabel,
+    required double piecesPerPack,
+    required double costPerPack,
+    required double reorderThreshold,
+    double initialPacks = 0,
+  }) async {
+    final itemRef = _db.collection('stockItems').doc();
+    final costPerUnit = piecesPerPack == 0 ? 0.0 : costPerPack / piecesPerPack;
+    await itemRef.set(
+      StockItemModel(
+        id: itemRef.id,
+        name: name,
+        pieceUnit: pieceUnit,
+        packLabel: packLabel,
+        piecesPerPack: piecesPerPack,
+        costPerPack: costPerPack,
+        costPerUnit: costPerUnit,
+        currentQty: initialPacks * piecesPerPack,
+        reorderThreshold: reorderThreshold,
+        lastUpdated: DateTime.now(),
+      ).toMap(),
+    );
   }
 
-  /// Central kitchen restocks an item: increases central quantity, logs a movement.
+  /// Metadata-only edit: name/units/pack composition/reorder threshold.
+  /// Never touches quantity, cost, or the ledger — use [restock] for that.
+  Future<void> updateStockItemDetails({
+    required String itemId,
+    required String name,
+    required String pieceUnit,
+    required String packLabel,
+    required double piecesPerPack,
+    required double reorderThreshold,
+  }) async {
+    await _db.collection('stockItems').doc(itemId).update({
+      'name': name,
+      'pieceUnit': pieceUnit,
+      'packLabel': packLabel,
+      'piecesPerPack': piecesPerPack,
+      'reorderThreshold': reorderThreshold,
+    });
+  }
+
+  Future<void> deleteStockItem(String itemId) async {
+    await _db.collection('stockItems').doc(itemId).delete();
+  }
+
+  /// Central kitchen receives a supplier delivery: converts packs to pieces
+  /// via the item's piecesPerPack, increases central quantity, updates cost,
+  /// and logs a movement (quantity/cost always in pieces, matching every
+  /// other movement type).
   Future<void> restock({
     required String itemId,
-    required double quantity,
-    required double cost,
+    required double packsReceived,
+    required double costPerPack,
     required String performedBy,
   }) async {
     final itemRef = _db.collection('stockItems').doc(itemId);
@@ -66,11 +117,18 @@ class FirestoreService {
 
     await _db.runTransaction((tx) async {
       final itemSnap = await tx.get(itemRef);
-      final currentQty = (itemSnap.data()?['currentQty'] ?? 0).toDouble();
+      final data = itemSnap.data();
+      final currentQty = (data?['currentQty'] ?? 0).toDouble();
+      final piecesPerPack = (data?['piecesPerPack'] ?? 1).toDouble();
+      final piecesReceived = packsReceived * piecesPerPack;
+      final costPerUnit = piecesPerPack == 0
+          ? 0.0
+          : costPerPack / piecesPerPack;
 
       tx.update(itemRef, {
-        'currentQty': currentQty + quantity,
-        'costPerUnit': cost,
+        'currentQty': currentQty + piecesReceived,
+        'costPerUnit': costPerUnit,
+        'costPerPack': costPerPack,
         'lastUpdated': DateTime.now().toIso8601String(),
       });
 
@@ -81,8 +139,8 @@ class FirestoreService {
           type: MovementType.restock,
           itemId: itemId,
           branchId: null,
-          quantity: quantity,
-          costAtTime: cost,
+          quantity: piecesReceived,
+          costAtTime: costPerUnit,
           performedBy: performedBy,
           timestamp: DateTime.now(),
         ).toMap(),
@@ -126,16 +184,27 @@ class FirestoreService {
   }
 
   /// Kitchen prepares an order: deducts central stock for each item, marks it preparing.
+  /// Reads every item doc first, then writes — Firestore transactions
+  /// reject any read that happens after a write in the same transaction,
+  /// which an interleaved read/write-per-item loop hits as soon as an
+  /// order has more than one item.
   Future<void> prepareOrder(OrderModel order, String performedBy) async {
     await _db.runTransaction((tx) async {
-      for (final item in order.items) {
-        final itemRef = _db.collection('stockItems').doc(item.stockItemId);
-        final itemSnap = await tx.get(itemRef);
-        final data = itemSnap.data();
+      final itemRefs = order.items
+          .map((item) => _db.collection('stockItems').doc(item.stockItemId))
+          .toList();
+      final itemSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
+      for (final ref in itemRefs) {
+        itemSnaps.add(await tx.get(ref));
+      }
+
+      for (var i = 0; i < order.items.length; i++) {
+        final item = order.items[i];
+        final data = itemSnaps[i].data();
         final currentQty = (data?['currentQty'] ?? 0).toDouble();
         final cost = (data?['costPerUnit'] ?? 0).toDouble();
 
-        tx.update(itemRef, {'currentQty': currentQty - item.quantity});
+        tx.update(itemRefs[i], {'currentQty': currentQty - item.quantity});
 
         final movementRef = _db.collection('stockMovements').doc();
         tx.set(
@@ -167,21 +236,33 @@ class FirestoreService {
     });
   }
 
-  /// Branch confirms receipt: increases branch stock, logs a movement at current item cost.
+  /// Branch confirms receipt: increases branch stock, logs a movement at
+  /// current item cost. Same all-reads-then-all-writes structure as
+  /// [prepareOrder], for the same reason.
   Future<void> confirmReceived(OrderModel order, String performedBy) async {
     await _db.runTransaction((tx) async {
+      final itemSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
+      final stockSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
+      final branchStockRefs = <DocumentReference<Map<String, dynamic>>>[];
+
       for (final item in order.items) {
         final itemRef = _db.collection('stockItems').doc(item.stockItemId);
-        final itemSnap = await tx.get(itemRef);
-        final cost = (itemSnap.data()?['costPerUnit'] ?? 0).toDouble();
+        itemSnaps.add(await tx.get(itemRef));
 
         final branchStockRef = _db
             .collection('branchStock')
             .doc('${order.branchId}_${item.stockItemId}');
-        final stockSnap = await tx.get(branchStockRef);
-        final currentQty = (stockSnap.data()?['currentQty'] ?? 0).toDouble();
+        branchStockRefs.add(branchStockRef);
+        stockSnaps.add(await tx.get(branchStockRef));
+      }
 
-        tx.set(branchStockRef, {
+      for (var i = 0; i < order.items.length; i++) {
+        final item = order.items[i];
+        final cost = (itemSnaps[i].data()?['costPerUnit'] ?? 0).toDouble();
+        final currentQty = (stockSnaps[i].data()?['currentQty'] ?? 0)
+            .toDouble();
+
+        tx.set(branchStockRefs[i], {
           'branchId': order.branchId,
           'itemId': item.stockItemId,
           'currentQty': currentQty + item.quantity,

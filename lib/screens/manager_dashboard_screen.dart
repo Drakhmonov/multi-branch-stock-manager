@@ -1,23 +1,58 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
-import '../models/branch_model.dart';
 import '../models/stock_movement_model.dart';
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../widgets/adaptive_nav_shell.dart';
 import 'branch_management_screen.dart';
 
 enum _Period { today, week, month, all }
 
-class ManagerDashboardScreen extends StatefulWidget {
+class ManagerDashboardScreen extends StatelessWidget {
   final UserModel currentUser;
+  final VoidCallback onSignOut;
 
-  const ManagerDashboardScreen({super.key, required this.currentUser});
+  const ManagerDashboardScreen({
+    super.key,
+    required this.currentUser,
+    required this.onSignOut,
+  });
 
   @override
-  State<ManagerDashboardScreen> createState() => _ManagerDashboardScreenState();
+  Widget build(BuildContext context) {
+    return AdaptiveNavShell(
+      subtitle: currentUser.name,
+      onSignOut: () async {
+        await AuthService().signOut();
+        onSignOut();
+      },
+      destinations: [
+        NavDestination(
+          label: 'Dashboard',
+          icon: Icons.dashboard,
+          contentBuilder: (_) => const _ManagerDashboardBody(),
+        ),
+        NavDestination(
+          label: 'Branches',
+          icon: Icons.store,
+          contentBuilder: (_) => const BranchManagementScreen(),
+        ),
+      ],
+    );
+  }
 }
 
-class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
+class _ManagerDashboardBody extends StatefulWidget {
+  const _ManagerDashboardBody();
+
+  @override
+  State<_ManagerDashboardBody> createState() => _ManagerDashboardBodyState();
+}
+
+class _ManagerDashboardBodyState extends State<_ManagerDashboardBody> {
   final _firestoreService = FirestoreService();
+  late final Stream<Map<String, String>> _branchNamesStream = _firestoreService
+      .streamBranchNames();
   _Period _period = _Period.week;
 
   DateTime? get _from {
@@ -36,156 +71,137 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manager Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.store),
-            tooltip: 'Branch Management',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const BranchManagementScreen()),
-            ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: SegmentedButton<_Period>(
+            segments: const [
+              ButtonSegment(value: _Period.today, label: Text('Today')),
+              ButtonSegment(value: _Period.week, label: Text('7 days')),
+              ButtonSegment(value: _Period.month, label: Text('30 days')),
+              ButtonSegment(value: _Period.all, label: Text('All time')),
+            ],
+            selected: {_period},
+            onSelectionChanged: (sel) => setState(() => _period = sel.first),
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: SegmentedButton<_Period>(
-              segments: const [
-                ButtonSegment(value: _Period.today, label: Text('Today')),
-                ButtonSegment(value: _Period.week, label: Text('7 days')),
-                ButtonSegment(value: _Period.month, label: Text('30 days')),
-                ButtonSegment(value: _Period.all, label: Text('All time')),
-              ],
-              selected: {_period},
-              onSelectionChanged: (sel) => setState(() => _period = sel.first),
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<List<BranchModel>>(
-              stream: _firestoreService.streamBranches(),
-              builder: (context, branchSnapshot) {
-                final branchNames = <String, String>{
-                  for (final b in branchSnapshot.data ?? <BranchModel>[])
-                    b.id: b.name,
-                };
-                return StreamBuilder<List<StockMovementModel>>(
-                  stream: _firestoreService.streamMovements(from: _from),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final movements = snapshot.data!;
-                    final sold = movements
-                        .where((m) => m.type == MovementType.sold)
-                        .toList();
-                    final wasted = movements
-                        .where((m) => m.type == MovementType.wasted)
-                        .toList();
+        ),
+        Expanded(
+          child: StreamBuilder<Map<String, String>>(
+            stream: _branchNamesStream,
+            builder: (context, branchSnapshot) {
+              final branchNames = branchSnapshot.data ?? <String, String>{};
+              return StreamBuilder<List<StockMovementModel>>(
+                stream: _firestoreService.streamMovements(from: _from),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final movements = snapshot.data!;
+                  final sold = movements
+                      .where((m) => m.type == MovementType.sold)
+                      .toList();
+                  final wasted = movements
+                      .where((m) => m.type == MovementType.wasted)
+                      .toList();
 
-                    final totalSoldCost = sold.fold<double>(
-                      0,
-                      (sum, m) => sum + m.quantity * m.costAtTime,
-                    );
-                    final totalWastedCost = wasted.fold<double>(
-                      0,
-                      (sum, m) => sum + m.quantity * m.costAtTime,
-                    );
-                    final wasteTotal = totalSoldCost + totalWastedCost;
-                    final wastePct = wasteTotal == 0
-                        ? 0.0
-                        : totalWastedCost / wasteTotal * 100;
+                  final totalSoldCost = sold.fold<double>(
+                    0,
+                    (sum, m) => sum + m.quantity * m.costAtTime,
+                  );
+                  final totalWastedCost = wasted.fold<double>(
+                    0,
+                    (sum, m) => sum + m.quantity * m.costAtTime,
+                  );
+                  final wasteTotal = totalSoldCost + totalWastedCost;
+                  final wastePct = wasteTotal == 0
+                      ? 0.0
+                      : totalWastedCost / wasteTotal * 100;
 
-                    final branchIds = {
-                      ...sold.map((m) => m.branchId),
-                      ...wasted.map((m) => m.branchId),
-                    }.whereType<String>().toList()..sort();
+                  final branchIds = {
+                    ...sold.map((m) => m.branchId),
+                    ...wasted.map((m) => m.branchId),
+                  }.whereType<String>().toList()..sort();
 
-                    return ListView(
-                      padding: const EdgeInsets.all(12),
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _SummaryCard(
-                                label: 'Sold value',
-                                value: totalSoldCost,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _SummaryCard(
-                                label: 'Wasted value',
-                                value: totalWastedCost,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              'Waste rate: ${wastePct.toStringAsFixed(1)}% of sold+wasted value',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
+                  return ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _SummaryCard(
+                              label: 'Sold value',
+                              value: totalSoldCost,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'By branch',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _SummaryCard(
+                              label: 'Wasted value',
+                              value: totalWastedCost,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Waste rate: ${wastePct.toStringAsFixed(1)}% of sold+wasted value',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        if (branchIds.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: Text(
-                              'No sold/wasted activity in this period.',
-                            ),
-                          )
-                        else
-                          ...branchIds.map((branchId) {
-                            final branchSoldCost = sold
-                                .where((m) => m.branchId == branchId)
-                                .fold<double>(
-                                  0,
-                                  (sum, m) => sum + m.quantity * m.costAtTime,
-                                );
-                            final branchWastedCost = wasted
-                                .where((m) => m.branchId == branchId)
-                                .fold<double>(
-                                  0,
-                                  (sum, m) => sum + m.quantity * m.costAtTime,
-                                );
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                title: Text(branchNames[branchId] ?? branchId),
-                                subtitle: Text(
-                                  'Sold: £${branchSoldCost.toStringAsFixed(2)}   '
-                                  'Wasted: £${branchWastedCost.toStringAsFixed(2)}',
-                                ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'By branch',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (branchIds.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            'No sold/wasted activity in this period.',
+                          ),
+                        )
+                      else
+                        ...branchIds.map((branchId) {
+                          final branchSoldCost = sold
+                              .where((m) => m.branchId == branchId)
+                              .fold<double>(
+                                0,
+                                (sum, m) => sum + m.quantity * m.costAtTime,
+                              );
+                          final branchWastedCost = wasted
+                              .where((m) => m.branchId == branchId)
+                              .fold<double>(
+                                0,
+                                (sum, m) => sum + m.quantity * m.costAtTime,
+                              );
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              title: Text(branchNames[branchId] ?? branchId),
+                              subtitle: Text(
+                                'Sold: £${branchSoldCost.toStringAsFixed(2)}   '
+                                'Wasted: £${branchWastedCost.toStringAsFixed(2)}',
                               ),
-                            );
-                          }),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
+                            ),
+                          );
+                        }),
+                    ],
+                  );
+                },
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

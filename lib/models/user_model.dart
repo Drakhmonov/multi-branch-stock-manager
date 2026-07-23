@@ -14,18 +14,18 @@ class UserModel {
   });
 
   Map<String, dynamic> toMap() => {
-        'name': name,
-        'role': role.name,
-        'branchId': branchId,
-      };
+    'name': name,
+    'role': role.name,
+    'branchId': branchId,
+  };
 
   factory UserModel.fromMap(String id, Map<String, dynamic> map) => UserModel(
-        id: id,
-        name: map['name'] ?? '',
-        role: UserRole.values.firstWhere(
-          (r) => r.name == map['role'],
-          orElse: () => UserRole.branchStaff,
-        ),
-        branchId: map['branchId'],
-      );
+    id: id,
+    name: map['name'] ?? '',
+    role: UserRole.values.firstWhere(
+      (r) => r.name == map['role'],
+      orElse: () => UserRole.branchStaff,
+    ),
+    branchId: map['branchId'],
+  );
 }

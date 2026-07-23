@@ -3,6 +3,15 @@ import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 
+String _heldLabel(StockItemModel item, double currentQty) {
+  if (item.piecesPerPack <= 1) {
+    return 'Currently held: $currentQty ${item.pieceUnit}';
+  }
+  final packs = (currentQty / item.piecesPerPack).toStringAsFixed(1);
+  return 'Currently held: $packs ${item.packLabel}(s) '
+      '($currentQty ${item.pieceUnit})';
+}
+
 class DailyStockUpdateScreen extends StatefulWidget {
   final UserModel currentUser;
 
@@ -14,6 +23,10 @@ class DailyStockUpdateScreen extends StatefulWidget {
 
 class _DailyStockUpdateScreenState extends State<DailyStockUpdateScreen> {
   final _firestoreService = FirestoreService();
+  late final Stream<List<StockItemModel>> _itemsStream = _firestoreService
+      .streamStockItems();
+  late final Stream<Map<String, double>> _branchStockStream = _firestoreService
+      .streamBranchStock(widget.currentUser.branchId ?? 'unknown');
   final Map<String, double> _sold = {};
   final Map<String, double> _wasted = {};
   bool _isSubmitting = false;
@@ -45,9 +58,9 @@ class _DailyStockUpdateScreenState extends State<DailyStockUpdateScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to submit: $e')));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -58,101 +71,122 @@ class _DailyStockUpdateScreenState extends State<DailyStockUpdateScreen> {
   Widget build(BuildContext context) {
     final branchId = widget.currentUser.branchId ?? 'unknown';
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Daily Stock Update')),
-      body: StreamBuilder<List<StockItemModel>>(
-        stream: _firestoreService.streamStockItems(),
-        builder: (context, itemsSnapshot) {
-          if (!itemsSnapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final items = itemsSnapshot.data!;
+    return StreamBuilder<List<StockItemModel>>(
+      stream: _itemsStream,
+      builder: (context, itemsSnapshot) {
+        if (!itemsSnapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = itemsSnapshot.data!;
 
-          return StreamBuilder<Map<String, double>>(
-            stream: _firestoreService.streamBranchStock(branchId),
-            builder: (context, stockSnapshot) {
-              final branchStock = stockSnapshot.data ?? {};
+        return StreamBuilder<Map<String, double>>(
+          stream: _branchStockStream,
+          builder: (context, stockSnapshot) {
+            final branchStock = stockSnapshot.data ?? {};
 
-              final heldItems = items
-                  .where((item) => (branchStock[item.id] ?? 0) > 0)
-                  .toList();
+            final heldItems = items
+                .where((item) => (branchStock[item.id] ?? 0) > 0)
+                .toList();
 
-              if (heldItems.isEmpty) {
-                return const Center(
-                    child: Text('No stock held at this branch yet.'));
-              }
-
-              return Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: heldItems.length,
-                      itemBuilder: (context, index) {
-                        final item = heldItems[index];
-                        final currentQty = branchStock[item.id] ?? 0;
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item.name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold)),
-                                Text('Currently held: $currentQty ${item.unit}'),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextField(
-                                        decoration: const InputDecoration(
-                                            labelText: 'Sold today'),
-                                        keyboardType: TextInputType.number,
-                                        onChanged: (v) => _sold[item.id] =
-                                            double.tryParse(v) ?? 0,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: TextField(
-                                        decoration: const InputDecoration(
-                                            labelText: 'Wasted today'),
-                                        keyboardType: TextInputType.number,
-                                        onChanged: (v) => _wasted[item.id] =
-                                            double.tryParse(v) ?? 0,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting
-                            ? null
-                            : () => _submitAll(branchId),
-                        child: _isSubmitting
-                            ? const CircularProgressIndicator()
-                            : const Text('Submit Daily Update'),
-                      ),
-                    ),
-                  ),
-                ],
+            if (heldItems.isEmpty) {
+              return const Center(
+                child: Text('No stock held at this branch yet.'),
               );
-            },
-          );
-        },
-      ),
+            }
+
+            return Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: heldItems.length,
+                    itemBuilder: (context, index) {
+                      final item = heldItems[index];
+                      final currentQty = branchStock[item.id] ?? 0;
+                      final isPackaged = item.piecesPerPack > 1;
+                      final soldWastedLabel = isPackaged
+                          ? item.packLabel
+                          : null;
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(_heldLabel(item, currentQty)),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      decoration: InputDecoration(
+                                        labelText: soldWastedLabel != null
+                                            ? 'Sold ($soldWastedLabel)'
+                                            : 'Sold today',
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (v) {
+                                        final entered = double.tryParse(v) ?? 0;
+                                        _sold[item.id] = isPackaged
+                                            ? entered * item.piecesPerPack
+                                            : entered;
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      decoration: InputDecoration(
+                                        labelText: soldWastedLabel != null
+                                            ? 'Wasted ($soldWastedLabel)'
+                                            : 'Wasted today',
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (v) {
+                                        final entered = double.tryParse(v) ?? 0;
+                                        _wasted[item.id] = isPackaged
+                                            ? entered * item.piecesPerPack
+                                            : entered;
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => _submitAll(branchId),
+                      child: _isSubmitting
+                          ? const CircularProgressIndicator()
+                          : const Text('Submit Daily Update'),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -41,6 +41,13 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  void _handleSignOut() {
+    setState(() {
+      _currentUser = null;
+      _showSignUp = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -62,12 +69,24 @@ class _MyAppState extends State<MyApp> {
                     onCreateAccount: () => setState(() => _showSignUp = true),
                   ))
           : _currentUser!.role == UserRole.kitchenStaff
-          ? KitchenDashboardScreen(currentUser: _currentUser!)
+          ? KitchenDashboardScreen(
+              currentUser: _currentUser!,
+              onSignOut: _handleSignOut,
+            )
           : _currentUser!.role == UserRole.delivery
-          ? DeliveryScreen(currentUser: _currentUser!)
+          ? DeliveryScreen(
+              currentUser: _currentUser!,
+              onSignOut: _handleSignOut,
+            )
           : _currentUser!.role == UserRole.manager
-          ? ManagerDashboardScreen(currentUser: _currentUser!)
-          : BranchHomeScreen(currentUser: _currentUser!),
+          ? ManagerDashboardScreen(
+              currentUser: _currentUser!,
+              onSignOut: _handleSignOut,
+            )
+          : BranchHomeScreen(
+              currentUser: _currentUser!,
+              onSignOut: _handleSignOut,
+            ),
     );
   }
 }

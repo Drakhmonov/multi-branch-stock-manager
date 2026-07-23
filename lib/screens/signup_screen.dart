@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../models/user_model.dart';
 import '../models/branch_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/responsive_body.dart';
 
 /// Public sign-up. Deliberately does not offer [UserRole.manager] here —
 /// manager accounts are still created manually, matching what
@@ -31,6 +32,8 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> {
   final _authService = AuthService();
   final _firestoreService = FirestoreService();
+  late final Stream<List<BranchModel>> _branchesStream = _firestoreService
+      .streamBranches();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -82,73 +85,76 @@ class _SignUpScreenState extends State<SignUpScreen> {
           onPressed: widget.onBackToLogin,
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<UserRole>(
-              initialValue: _role,
-              decoration: const InputDecoration(labelText: 'Role'),
-              items: _signUpRoles
-                  .map((r) => DropdownMenuItem(value: r, child: Text(r.name)))
-                  .toList(),
-              onChanged: (role) => setState(() {
-                _role = role!;
-                _selectedBranchId = null;
-              }),
-            ),
-            if (_role == UserRole.branchStaff) ...[
-              const SizedBox(height: 12),
-              StreamBuilder<List<BranchModel>>(
-                stream: _firestoreService.streamBranches(),
-                builder: (context, snapshot) {
-                  final branches = snapshot.data ?? <BranchModel>[];
-                  return DropdownButtonFormField<String>(
-                    initialValue: _selectedBranchId,
-                    decoration: const InputDecoration(labelText: 'Branch'),
-                    items: branches
-                        .map(
-                          (b) => DropdownMenuItem(
-                            value: b.id,
-                            child: Text(b.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (branchId) =>
-                        setState(() => _selectedBranchId = branchId),
-                  );
-                },
+      body: ResponsiveBody(
+        maxWidth: 440,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Name'),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'Email'),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: true,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<UserRole>(
+                initialValue: _role,
+                decoration: const InputDecoration(labelText: 'Role'),
+                items: _signUpRoles
+                    .map((r) => DropdownMenuItem(value: r, child: Text(r.name)))
+                    .toList(),
+                onChanged: (role) => setState(() {
+                  _role = role!;
+                  _selectedBranchId = null;
+                }),
+              ),
+              if (_role == UserRole.branchStaff) ...[
+                const SizedBox(height: 12),
+                StreamBuilder<List<BranchModel>>(
+                  stream: _branchesStream,
+                  builder: (context, snapshot) {
+                    final branches = snapshot.data ?? <BranchModel>[];
+                    return DropdownButtonFormField<String>(
+                      initialValue: _selectedBranchId,
+                      decoration: const InputDecoration(labelText: 'Branch'),
+                      items: branches
+                          .map(
+                            (b) => DropdownMenuItem(
+                              value: b.id,
+                              child: Text(b.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (branchId) =>
+                          setState(() => _selectedBranchId = branchId),
+                    );
+                  },
+                ),
+              ],
+              const SizedBox(height: 20),
+              if (_errorMessage != null)
+                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+              const SizedBox(height: 12),
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton(
+                      onPressed: _handleSignUp,
+                      child: const Text('Create Account'),
+                    ),
             ],
-            const SizedBox(height: 20),
-            if (_errorMessage != null)
-              Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 12),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _handleSignUp,
-                    child: const Text('Create Account'),
-                  ),
-          ],
+          ),
         ),
       ),
     );
