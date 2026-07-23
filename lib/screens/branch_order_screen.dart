@@ -3,6 +3,7 @@ import '../models/stock_item_model.dart';
 import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/stream_error_view.dart';
 
 class BranchOrderScreen extends StatefulWidget {
   final UserModel currentUser;
@@ -83,6 +84,9 @@ class _BranchOrderScreenState extends State<BranchOrderScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return StreamErrorView(error: snapshot.error);
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(child: Text('No stock items available yet.'));

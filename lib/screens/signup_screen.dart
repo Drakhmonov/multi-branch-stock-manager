@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import '../models/branch_model.dart';
 import '../services/firestore_service.dart';
 import '../widgets/responsive_body.dart';
+import '../widgets/stream_error_view.dart';
 
 /// Public sign-up. Deliberately does not offer [UserRole.manager] here —
 /// manager accounts are still created manually, matching what
@@ -125,6 +126,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 StreamBuilder<List<BranchModel>>(
                   stream: _branchesStream,
                   builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return StreamErrorView(error: snapshot.error);
+                    }
                     final branches = snapshot.data ?? <BranchModel>[];
                     return DropdownButtonFormField<String>(
                       initialValue: _selectedBranchId,

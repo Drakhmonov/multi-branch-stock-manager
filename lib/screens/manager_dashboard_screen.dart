@@ -4,6 +4,7 @@ import '../models/stock_movement_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/adaptive_nav_shell.dart';
+import '../widgets/stream_error_view.dart';
 import 'branch_management_screen.dart';
 
 enum _Period { today, week, month, all }
@@ -94,6 +95,9 @@ class _ManagerDashboardBodyState extends State<_ManagerDashboardBody> {
               return StreamBuilder<List<StockMovementModel>>(
                 stream: _firestoreService.streamMovements(from: _from),
                 builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return StreamErrorView(error: snapshot.error);
+                  }
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }

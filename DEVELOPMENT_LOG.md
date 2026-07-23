@@ -294,3 +294,23 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 **Issues & resolutions:**
 - The new search bars on `BranchOrderScreen`/`StockCatalogScreen` initially made typing impossible — no characters would appear, backspace didn't work, and focus dropped after every keystroke. Root cause: every screen's `StreamBuilder` called `_firestoreService.streamXxx()` directly inside `build()`, creating a brand-new `Stream` object on every rebuild; the search field's `onChanged` called `setState` on every keystroke, so each keystroke recreated the stream, which reset `StreamBuilder` to its loading state and tore down the whole subtree — including the text field being typed into. Fixed by caching every such stream once (`late final` field) instead of recreating it in `build()`, across every screen with this pattern, not just the two with search bars
 - Preparing or confirming an order with more than one line item failed with a Firestore transaction error; single-item orders worked fine. Root cause: `prepareOrder()` and `confirmReceived()` looped over the order's items doing a read then writes per item — Firestore transactions require every read in a transaction to happen before any write, and the second item's read came after the first item's writes. Fixed by restructuring both methods into two passes: read every item doc first, then perform all the writes
+
+-----------
+
+## Phase 14 — Closing the silent stream-failure gap
+**Dates:** 23 July 2026
+
+**Goal:** Fix the technical debt item flagged back in Phase 9 and reiterated in Phase 13: every `StreamBuilder` in the app renders its ordinary empty-state message on a stream error (`snapshot.hasError` is never checked), so a real failure — a missing composite index, a permissions rejection, a dropped connection — looks identical to "there's genuinely nothing here." Phase 9's £0.00 dashboard bug was a direct instance of this class of bug; nothing since had actually closed the gap for the other ten screens that share the pattern.
+
+**Completed:**
+- Added `StreamErrorView` (`lib/widgets/stream_error_view.dart`): a small shared widget showing an error icon, a plain-language message, and the underlying error text, for use wherever a stream's failure needs to be visible instead of swallowed
+- Audited all 11 screens using `StreamBuilder` and added a `snapshot.hasError` check, ahead of the existing loading/empty checks, to every stream whose failure would actually block or mislead the user: `BranchOrderScreen`, `StockCatalogScreen`, `ManagerDashboardScreen` (movements), `KitchenDashboardScreen` (orders), `DeliveryScreen` (orders), `BranchManagementScreen`, `ReceiveDeliveryScreen`, `SignUpScreen` (branch dropdown — a required field for branch-staff sign-up), and both streams in `DailyStockUpdateScreen` (items and the branch's own stock levels)
+- `BranchHistoryScreen`: added the same `hasError` handling to its primary movements stream; for the secondary items stream (used only to populate the "Log Correction" dialog), disabled the correction FAB with an explanatory `SnackBar` on failure instead of letting it open a dialog with no items to select
+- Ran `flutter analyze` (clean) and did a headless smoke test — launched `flutter run -d chrome`, confirmed the dev server compiled and served the app with no exceptions in the Flutter run log, then shut it down
+
+**Decisions made:**
+- Not every `StreamBuilder` got this treatment. Several screens (`BranchHomeScreen`, and the `branchNamesStream` used inside `KitchenDashboardScreen`/`DeliveryScreen`/`ManagerDashboardScreen`) only use their stream to resolve a branch ID to a display name; on failure they already degrade gracefully to showing the raw ID instead of hiding a real functional problem, so these were deliberately left alone rather than adding a full-screen error state for a cosmetic label
+- Chose one shared `StreamErrorView` widget over ad hoc per-screen error text, so the failure state reads consistently across the app and is a single place to improve later (e.g. adding a retry action)
+
+**Issues & resolutions:**
+- The Claude Code browser extension wasn't connected in this environment, so the usual click-through UI verification wasn't possible. Substituted `flutter analyze` plus a `flutter run -d chrome` smoke test (server compiles, serves HTTP 200, no exceptions in the run log) as a lower-confidence stand-in; a full manual walkthrough of the error paths (e.g. temporarily pointing a stream at a nonexistent collection) is still worth doing by hand before relying on this in the dissertation write-up

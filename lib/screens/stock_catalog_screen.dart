@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/stream_error_view.dart';
 
 class StockCatalogScreen extends StatefulWidget {
   final UserModel currentUser;
@@ -417,6 +418,9 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return StreamErrorView(error: snapshot.error);
         }
 
         final allItems = snapshot.data ?? <StockItemModel>[];

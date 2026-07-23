@@ -3,6 +3,7 @@ import '../models/stock_item_model.dart';
 import '../models/stock_movement_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/stream_error_view.dart';
 
 String _labelFor(MovementType type) {
   switch (type) {
@@ -198,6 +199,7 @@ class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
       stream: _itemsStream,
       builder: (context, itemsSnapshot) {
         final items = itemsSnapshot.data ?? <StockItemModel>[];
+        final itemsHasError = itemsSnapshot.hasError;
         final itemNames = {
           for (final i in items) i.id: '${i.name} (${i.pieceUnit})',
         };
@@ -208,11 +210,14 @@ class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
+            if (snapshot.hasError) {
+              return StreamErrorView(error: snapshot.error);
+            }
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return Stack(
                 children: [
                   const Center(child: Text('No activity logged yet.')),
-                  _buildFab(items),
+                  _buildFab(items, itemsHasError),
                 ],
               );
             }
@@ -248,7 +253,7 @@ class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
                     );
                   },
                 ),
-                _buildFab(items),
+                _buildFab(items, itemsHasError),
               ],
             );
           },
@@ -257,12 +262,20 @@ class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
     );
   }
 
-  Widget _buildFab(List<StockItemModel> items) {
+  Widget _buildFab(List<StockItemModel> items, bool itemsHasError) {
     return Positioned(
       right: 16,
       bottom: 16,
       child: FloatingActionButton.extended(
-        onPressed: () => _showCorrectionDialog(items),
+        onPressed: itemsHasError
+            ? () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Couldn\'t load items — check your connection and try again.',
+                  ),
+                ),
+              )
+            : () => _showCorrectionDialog(items),
         icon: const Icon(Icons.build_outlined),
         label: const Text('Log Correction'),
       ),

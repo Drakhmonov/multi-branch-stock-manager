@@ -4,6 +4,7 @@ import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/responsive_body.dart';
+import '../widgets/stream_error_view.dart';
 
 class DeliveryScreen extends StatefulWidget {
   final UserModel currentUser;
@@ -74,6 +75,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return StreamErrorView(error: snapshot.error);
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(child: Text('No orders yet.'));

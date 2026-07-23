@@ -4,6 +4,7 @@ import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/adaptive_nav_shell.dart';
+import '../widgets/stream_error_view.dart';
 import 'stock_catalog_screen.dart';
 
 class KitchenDashboardScreen extends StatelessWidget {
@@ -91,6 +92,9 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return StreamErrorView(error: snapshot.error);
             }
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return const Center(child: Text('No orders yet.'));

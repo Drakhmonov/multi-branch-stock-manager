@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/branch_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/stream_error_view.dart';
 
 class BranchManagementScreen extends StatefulWidget {
   const BranchManagementScreen({super.key});
@@ -101,6 +102,9 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return StreamErrorView(error: snapshot.error);
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Stack(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../widgets/stream_error_view.dart';
 
 String _heldLabel(StockItemModel item, double currentQty) {
   if (item.piecesPerPack <= 1) {
@@ -74,6 +75,9 @@ class _DailyStockUpdateScreenState extends State<DailyStockUpdateScreen> {
     return StreamBuilder<List<StockItemModel>>(
       stream: _itemsStream,
       builder: (context, itemsSnapshot) {
+        if (itemsSnapshot.hasError) {
+          return StreamErrorView(error: itemsSnapshot.error);
+        }
         if (!itemsSnapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -82,6 +86,9 @@ class _DailyStockUpdateScreenState extends State<DailyStockUpdateScreen> {
         return StreamBuilder<Map<String, double>>(
           stream: _branchStockStream,
           builder: (context, stockSnapshot) {
+            if (stockSnapshot.hasError) {
+              return StreamErrorView(error: stockSnapshot.error);
+            }
             final branchStock = stockSnapshot.data ?? {};
 
             final heldItems = items
