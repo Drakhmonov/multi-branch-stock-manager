@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
+import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
@@ -30,6 +31,8 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       .streamBranchNames();
   late final Stream<List<OrderModel>> _ordersStream = _firestoreService
       .streamOrders();
+  late final Stream<List<StockItemModel>> _stockItemsStream = _firestoreService
+      .streamStockItems();
   final Set<String> _processingIds = {};
 
   Future<void> _handleDeliver(OrderModel order) async {
@@ -80,100 +83,113 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
         ],
       ),
       body: ResponsiveBody(
-        child: StreamBuilder<Map<String, String>>(
-          stream: _branchNamesStream,
-          builder: (context, branchSnapshot) {
-            final branchNames = branchSnapshot.data ?? <String, String>{};
+        child: StreamBuilder<List<StockItemModel>>(
+          stream: _stockItemsStream,
+          builder: (context, stockSnapshot) {
+            final catalogById = {
+              for (final c in stockSnapshot.data ?? <StockItemModel>[]) c.id: c,
+            };
 
-            return StreamBuilder<List<OrderModel>>(
-              stream: _ordersStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return StreamErrorView(error: snapshot.error);
-                }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text('No orders yet.'));
-                }
+            return StreamBuilder<Map<String, String>>(
+              stream: _branchNamesStream,
+              builder: (context, branchSnapshot) {
+                final branchNames = branchSnapshot.data ?? <String, String>{};
 
-                final readyForDelivery = snapshot.data!
-                    .where((o) => o.status == OrderStatus.preparing)
-                    .toList();
-                final delivered = snapshot.data!
-                    .where((o) => o.status == OrderStatus.delivered)
-                    .toList();
+                return StreamBuilder<List<OrderModel>>(
+                  stream: _ordersStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return StreamErrorView(error: snapshot.error);
+                    }
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const Center(child: Text('No orders yet.'));
+                    }
 
-                return ListView(
-                  padding: const EdgeInsets.all(12),
-                  children: [
-                    Text(
-                      'Ready for delivery (${readyForDelivery.length})',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    if (readyForDelivery.isEmpty)
-                      const Text('Nothing ready yet.'),
-                    ...readyForDelivery.map(
-                      (order) => Card(
-                        child: ListTile(
-                          onTap: () => showOrderDetailSheet(
-                            context,
-                            initialOrder: order,
-                            branchName: branchNames[order.branchId],
-                          ),
-                          title: Text(
-                            'Branch: ${branchNames[order.branchId] ?? order.branchId}',
-                          ),
-                          subtitle: Text(orderItemsSummary(order.items)),
-                          trailing: ElevatedButton(
-                            onPressed: _processingIds.contains(order.id)
-                                ? null
-                                : () => _handleDeliver(order),
-                            child: _processingIds.contains(order.id)
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text('Mark Delivered'),
+                    final readyForDelivery = snapshot.data!
+                        .where((o) => o.status == OrderStatus.preparing)
+                        .toList();
+                    final delivered = snapshot.data!
+                        .where((o) => o.status == OrderStatus.delivered)
+                        .toList();
+
+                    return ListView(
+                      padding: const EdgeInsets.all(12),
+                      children: [
+                        Text(
+                          'Ready for delivery (${readyForDelivery.length})',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        if (readyForDelivery.isEmpty)
+                          const Text('Nothing ready yet.'),
+                        ...readyForDelivery.map(
+                          (order) => Card(
+                            child: ListTile(
+                              onTap: () => showOrderDetailSheet(
+                                context,
+                                initialOrder: order,
+                                branchName: branchNames[order.branchId],
+                              ),
+                              title: Text(
+                                'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                              ),
+                              subtitle: Text(
+                                orderItemsSummary(order.items, catalogById),
+                              ),
+                              trailing: ElevatedButton(
+                                onPressed: _processingIds.contains(order.id)
+                                    ? null
+                                    : () => _handleDeliver(order),
+                                child: _processingIds.contains(order.id)
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Mark Delivered'),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Recently delivered (${delivered.length})',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    if (delivered.isEmpty) const Text('No deliveries yet.'),
-                    ...delivered.map(
-                      (order) => Card(
-                        color: Theme.of(
-                          context,
-                        ).extension<StatusColors>()!.successContainer,
-                        child: ListTile(
-                          onTap: () => showOrderDetailSheet(
-                            context,
-                            initialOrder: order,
-                            branchName: branchNames[order.branchId],
-                          ),
-                          title: Text(
-                            'Branch: ${branchNames[order.branchId] ?? order.branchId}',
-                          ),
-                          subtitle: Text(orderItemsSummary(order.items)),
-                          trailing: const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
+                        const SizedBox(height: 24),
+                        Text(
+                          'Recently delivered (${delivered.length})',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        if (delivered.isEmpty) const Text('No deliveries yet.'),
+                        ...delivered.map(
+                          (order) => Card(
+                            color: Theme.of(
+                              context,
+                            ).extension<StatusColors>()!.successContainer,
+                            child: ListTile(
+                              onTap: () => showOrderDetailSheet(
+                                context,
+                                initialOrder: order,
+                                branchName: branchNames[order.branchId],
+                              ),
+                              title: Text(
+                                'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                              ),
+                              subtitle: Text(
+                                orderItemsSummary(order.items, catalogById),
+                              ),
+                              trailing: const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 );
               },
             );

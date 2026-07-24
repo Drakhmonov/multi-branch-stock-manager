@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
+import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
@@ -26,6 +27,8 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
   final _firestoreService = FirestoreService();
   late final Stream<List<OrderModel>> _ordersStream = _firestoreService
       .streamOrders(branchId: widget.currentUser.branchId ?? 'unknown');
+  late final Stream<List<StockItemModel>> _stockItemsStream = _firestoreService
+      .streamStockItems();
   final Set<String> _processingIds = {};
 
   Future<void> _handleConfirm(OrderModel order) async {
@@ -62,12 +65,17 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
     }
   }
 
-  Widget _orderCard(OrderModel order, {Color? color, Widget? trailing}) {
+  Widget _orderCard(
+    OrderModel order,
+    Map<String, StockItemModel> catalogById, {
+    Color? color,
+    Widget? trailing,
+  }) {
     return Card(
       color: color,
       child: ListTile(
         onTap: () => showOrderDetailSheet(context, initialOrder: order),
-        title: Text(orderItemsSummary(order.items)),
+        title: Text(orderItemsSummary(order.items, catalogById)),
         trailing: trailing,
       ),
     );
@@ -75,101 +83,115 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<OrderModel>>(
-      stream: _ordersStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return StreamErrorView(error: snapshot.error);
-        }
+    return StreamBuilder<List<StockItemModel>>(
+      stream: _stockItemsStream,
+      builder: (context, stockSnapshot) {
+        final catalogById = {
+          for (final c in stockSnapshot.data ?? <StockItemModel>[]) c.id: c,
+        };
 
-        final orders = snapshot.data ?? [];
+        return StreamBuilder<List<OrderModel>>(
+          stream: _ordersStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return StreamErrorView(error: snapshot.error);
+            }
 
-        if (orders.isEmpty) {
-          return const Center(child: Text('No orders yet.'));
-        }
+            final orders = snapshot.data ?? [];
 
-        final requested = orders
-            .where((o) => o.status == OrderStatus.requested)
-            .toList();
-        final preparing = orders
-            .where((o) => o.status == OrderStatus.preparing)
-            .toList();
-        final toReceive = orders
-            .where((o) => o.status == OrderStatus.delivered)
-            .toList();
-        final received = orders
-            .where((o) => o.status == OrderStatus.received)
-            .toList();
+            if (orders.isEmpty) {
+              return const Center(child: Text('No orders yet.'));
+            }
 
-        return ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Text(
-              'Requested (${requested.length})',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            if (requested.isEmpty) const Text('Nothing requested.'),
-            ...requested.map((order) => _orderCard(order)),
-            const SizedBox(height: 24),
-            Text(
-              'Preparing (${preparing.length})',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            if (preparing.isEmpty) const Text('Nothing in preparation.'),
-            ...preparing.map(
-              (order) => _orderCard(
-                order,
-                color: Theme.of(context).colorScheme.tertiaryContainer,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Receive Order (${toReceive.length})',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            if (toReceive.isEmpty) const Text('No order.'),
-            ...toReceive.map(
-              (order) => _orderCard(
-                order,
-                trailing: ElevatedButton(
-                  onPressed: _processingIds.contains(order.id)
-                      ? null
-                      : () => _handleConfirm(order),
-                  child: _processingIds.contains(order.id)
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Confirm Received'),
+            final requested = orders
+                .where((o) => o.status == OrderStatus.requested)
+                .toList();
+            final preparing = orders
+                .where((o) => o.status == OrderStatus.preparing)
+                .toList();
+            final toReceive = orders
+                .where((o) => o.status == OrderStatus.delivered)
+                .toList();
+            final received = orders
+                .where((o) => o.status == OrderStatus.received)
+                .toList();
+
+            return ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                Text(
+                  'Requested (${requested.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Received Order (${received.length})',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            if (received.isEmpty) const Text('No order.'),
-            ...received.map((order) {
-              final statusColors = Theme.of(context).extension<StatusColors>()!;
-              return _orderCard(
-                order,
-                color: statusColors.successContainer,
-                trailing: Icon(
-                  Icons.check_circle,
-                  color: statusColors.onSuccessContainer,
+                const SizedBox(height: 8),
+                if (requested.isEmpty) const Text('Nothing requested.'),
+                ...requested.map((order) => _orderCard(order, catalogById)),
+                const SizedBox(height: 24),
+                Text(
+                  'Preparing (${preparing.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              );
-            }),
-          ],
+                const SizedBox(height: 8),
+                if (preparing.isEmpty) const Text('Nothing in preparation.'),
+                ...preparing.map(
+                  (order) => _orderCard(
+                    order,
+                    catalogById,
+                    color: Theme.of(context).colorScheme.tertiaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Receive Order (${toReceive.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if (toReceive.isEmpty) const Text('No order.'),
+                ...toReceive.map(
+                  (order) => _orderCard(
+                    order,
+                    catalogById,
+                    trailing: ElevatedButton(
+                      onPressed: _processingIds.contains(order.id)
+                          ? null
+                          : () => _handleConfirm(order),
+                      child: _processingIds.contains(order.id)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Confirm Received'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Received Order (${received.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if (received.isEmpty) const Text('No order.'),
+                ...received.map((order) {
+                  final statusColors = Theme.of(
+                    context,
+                  ).extension<StatusColors>()!;
+                  return _orderCard(
+                    order,
+                    catalogById,
+                    color: statusColors.successContainer,
+                    trailing: Icon(
+                      Icons.check_circle,
+                      color: statusColors.onSuccessContainer,
+                    ),
+                  );
+                }),
+              ],
+            );
+          },
         );
       },
     );

@@ -44,16 +44,33 @@ class KitchenDashboardScreen extends StatelessWidget {
   }
 }
 
+bool _isPackaged(StockItemModel? item) => item != null && item.piecesPerPack > 1;
+
+/// The quantity shown/entered in the prepare dialog's fields is in packs for
+/// a packaged item (matching how the branch ordered it), pieces otherwise.
+String _inputQtyFromPieces(double pieces, StockItemModel? stockItem) {
+  if (!_isPackaged(stockItem)) return pieces.toStringAsFixed(0);
+  final packs = pieces / stockItem!.piecesPerPack;
+  return packs == packs.roundToDouble()
+      ? packs.toStringAsFixed(0)
+      : packs.toStringAsFixed(1);
+}
+
+double _piecesFromInput(
+  String text,
+  StockItemModel? stockItem,
+  double fallbackPieces,
+) {
+  final entered = double.tryParse(text.trim());
+  if (entered == null) return fallbackPieces;
+  return _isPackaged(stockItem) ? entered * stockItem!.piecesPerPack : entered;
+}
+
 class _AddedLine {
-  final String stockItemId;
-  final String name;
+  final StockItemModel stockItem;
   final TextEditingController qtyController;
 
-  _AddedLine({
-    required this.stockItemId,
-    required this.name,
-    required this.qtyController,
-  });
+  _AddedLine({required this.stockItem, required this.qtyController});
 }
 
 class _KitchenOrdersBody extends StatefulWidget {
@@ -79,10 +96,14 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
     OrderModel order,
     List<StockItemModel> catalog,
   ) {
+    final catalogById = {for (final c in catalog) c.id: c};
     final qtyControllers = {
       for (final item in order.items)
         item.stockItemId: TextEditingController(
-          text: item.quantity.toStringAsFixed(0),
+          text: _inputQtyFromPieces(
+            item.quantity,
+            catalogById[item.stockItemId],
+          ),
         ),
     };
     final addedLines = <_AddedLine>[];
@@ -98,7 +119,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                 .where(
                   (c) => !order.items.any((i) => i.stockItemId == c.id),
                 )
-                .where((c) => !addedLines.any((l) => l.stockItemId == c.id))
+                .where((c) => !addedLines.any((l) => l.stockItem.id == c.id))
                 .toList();
 
             void submit() {
@@ -108,19 +129,22 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                     stockItemId: item.stockItemId,
                     name: item.name,
                     quantity: item.quantity,
-                    fulfilledQuantity:
-                        double.tryParse(
-                          qtyControllers[item.stockItemId]!.text.trim(),
-                        ) ??
-                        item.quantity,
+                    fulfilledQuantity: _piecesFromInput(
+                      qtyControllers[item.stockItemId]!.text,
+                      catalogById[item.stockItemId],
+                      item.quantity,
+                    ),
                   ),
                 for (final line in addedLines)
                   OrderItem(
-                    stockItemId: line.stockItemId,
-                    name: line.name,
+                    stockItemId: line.stockItem.id,
+                    name: line.stockItem.name,
                     quantity: 0,
-                    fulfilledQuantity:
-                        double.tryParse(line.qtyController.text.trim()) ?? 0,
+                    fulfilledQuantity: _piecesFromInput(
+                      line.qtyController.text,
+                      line.stockItem,
+                      0,
+                    ),
                   ),
               ];
               Navigator.of(
@@ -147,14 +171,33 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
                             children: [
-                              Expanded(child: Text(item.name)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.name),
+                                    Text(
+                                      'Requested: ${formatItemQty(item.quantity, catalogById[item.stockItemId])}',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
                               SizedBox(
                                 width: 90,
                                 child: TextField(
                                   controller: qtyControllers[item.stockItemId],
                                   keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Sending',
+                                  decoration: InputDecoration(
+                                    labelText: _isPackaged(
+                                          catalogById[item.stockItemId],
+                                        )
+                                        ? catalogById[item.stockItemId]!
+                                              .packLabel
+                                        : 'Sending',
                                   ),
                                 ),
                               ),
@@ -173,14 +216,16 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
                               children: [
-                                Expanded(child: Text(line.name)),
+                                Expanded(child: Text(line.stockItem.name)),
                                 SizedBox(
                                   width: 90,
                                   child: TextField(
                                     controller: line.qtyController,
                                     keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Qty',
+                                    decoration: InputDecoration(
+                                      labelText: _isPackaged(line.stockItem)
+                                          ? line.stockItem.packLabel
+                                          : 'Qty',
                                     ),
                                   ),
                                 ),
@@ -227,8 +272,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                                       setDialogState(() {
                                         addedLines.add(
                                           _AddedLine(
-                                            stockItemId: item.id,
-                                            name: item.name,
+                                            stockItem: item,
                                             qtyController:
                                                 TextEditingController(
                                                   text: '0',
@@ -308,6 +352,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
       stream: _stockItemsStream,
       builder: (context, stockSnapshot) {
         final catalog = stockSnapshot.data ?? <StockItemModel>[];
+        final catalogById = {for (final c in catalog) c.id: c};
 
         return StreamBuilder<Map<String, String>>(
           stream: _branchNamesStream,
@@ -354,7 +399,9 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                           title: Text(
                             'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                           ),
-                          subtitle: Text(orderItemsSummary(order.items)),
+                          subtitle: Text(
+                            orderItemsSummary(order.items, catalogById),
+                          ),
                           trailing: ElevatedButton(
                             onPressed: _processingIds.contains(order.id)
                                 ? null
@@ -392,7 +439,9 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                           title: Text(
                             'Branch: ${branchNames[order.branchId] ?? order.branchId}',
                           ),
-                          subtitle: Text(orderItemsSummary(order.items)),
+                          subtitle: Text(
+                            orderItemsSummary(order.items, catalogById),
+                          ),
                           trailing: const Text('Awaiting delivery'),
                         ),
                       ),

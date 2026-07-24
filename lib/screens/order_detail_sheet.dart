@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
+import '../models/stock_item_model.dart';
 import '../services/firestore_service.dart';
 import '../utils/format.dart';
 import '../widgets/order_status_timeline.dart';
@@ -24,7 +25,7 @@ void showOrderDetailSheet(
   );
 }
 
-class _OrderDetailSheet extends StatelessWidget {
+class _OrderDetailSheet extends StatefulWidget {
   final String orderId;
   final OrderModel initialOrder;
   final String? branchName;
@@ -36,6 +37,18 @@ class _OrderDetailSheet extends StatelessWidget {
   });
 
   @override
+  State<_OrderDetailSheet> createState() => _OrderDetailSheetState();
+}
+
+class _OrderDetailSheetState extends State<_OrderDetailSheet> {
+  final _firestoreService = FirestoreService();
+  late final Stream<OrderModel?> _orderStream = _firestoreService.streamOrder(
+    widget.orderId,
+  );
+  late final Stream<List<StockItemModel>> _stockItemsStream = _firestoreService
+      .streamStockItems();
+
+  @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
@@ -45,41 +58,53 @@ class _OrderDetailSheet extends StatelessWidget {
           top: 20,
           bottom: 20 + MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: StreamBuilder<OrderModel?>(
-          stream: FirestoreService().streamOrder(orderId),
-          initialData: initialOrder,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return SizedBox(
-                height: 200,
-                child: StreamErrorView(error: snapshot.error),
-              );
-            }
-            final order = snapshot.data ?? initialOrder;
+        child: StreamBuilder<List<StockItemModel>>(
+          stream: _stockItemsStream,
+          builder: (context, stockSnapshot) {
+            final catalogById = {
+              for (final c in stockSnapshot.data ?? <StockItemModel>[])
+                c.id: c,
+            };
 
-            return SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    branchName != null ? 'Order — $branchName' : 'Order',
-                    style: Theme.of(context).textTheme.titleLarge,
+            return StreamBuilder<OrderModel?>(
+              stream: _orderStream,
+              initialData: widget.initialOrder,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return SizedBox(
+                    height: 200,
+                    child: StreamErrorView(error: snapshot.error),
+                  );
+                }
+                final order = snapshot.data ?? widget.initialOrder;
+
+                return SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.branchName != null
+                            ? 'Order — ${widget.branchName}'
+                            : 'Order',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Placed by ${order.placedByName}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        orderItemsSummary(order.items, catalogById),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 20),
+                      OrderStatusTimeline(order: order),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Placed by ${order.placedByName}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    orderItemsSummary(order.items),
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 20),
-                  OrderStatusTimeline(order: order),
-                ],
-              ),
+                );
+              },
             );
           },
         ),

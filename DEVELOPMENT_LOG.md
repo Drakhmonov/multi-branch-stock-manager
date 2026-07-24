@@ -441,3 +441,25 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None. Verification stayed at the same level as recent phases (analyze/test/compile-serve, no live browser click-through) — worth actually looking at the rendered chart before relying on it, same caveat as Phase 18's theme work
+
+-----------
+
+## Phase 20 — Fixed order quantities showing in pieces instead of packs everywhere
+**Dates:** 24 July 2026
+
+**Goal:** User-reported bug: the kitchen "Prepare Order" dialog was showing a packaged item like dumplings in raw pieces (e.g. "40") rather than the packs a branch actually ordered in (e.g. "2 bags"), with no unit label at all. Checking "other places" as asked surfaced the same gap across every order-display surface built in Phases 15–16: `orderItemsSummary()` and the kitchen prepare dialog's quantity inputs never got the pack-awareness Phase 13 gave `BranchOrderScreen` and `DailyStockUpdateScreen` — those two screens convert between packs and pieces at the input layer; everything order-related added after them (order detail sheet, kitchen/delivery/receive-delivery lists, the manager Orders tab) never did.
+
+**Completed:**
+- Added `formatItemQty()` (`lib/utils/format.dart`): given a piece count and a catalog item, shows packs with the piece count alongside for a packaged item ("2 bags (40 pcs)"), the piece unit for an unpackaged one ("10 pcs"), or a bare number if the catalog entry isn't available — same convention `_availableLabel`/`_heldLabel`/`_stockLabel` already used
+- `orderItemsSummary()` now takes a `Map<String, StockItemModel>` catalog lookup (order items themselves only ever store a raw piece quantity, never pack composition, so the catalog has to be joined in at display time) and uses `formatItemQty` throughout, including the requested-vs-sent and added-item cases
+- `KitchenDashboardScreen`'s prepare dialog: quantity fields now display and accept **packs** for a packaged item (converting to/from pieces on submit, the same conversion `BranchOrderScreen`'s order form already does) instead of a bare piece count with no unit at all; added a "Requested: X" line per item so kitchen can see the original ask while adjusting, which the dialog previously didn't show anywhere
+- Threaded a stock-items catalog stream into every screen that renders `orderItemsSummary` but didn't already have one: `order_detail_sheet.dart` (converted from `StatelessWidget` to `StatefulWidget` so the stream could be cached instead of recreated on every rebuild, per the Phase 13 stream-caching rule), `delivery_screen.dart`, `receive_delivery_screen.dart`, `manager_dashboard_screen.dart`'s Orders tab
+- Extended `test/utils/format_test.dart` with real coverage of the conversion (packaged vs unpackaged, singular "1 bag" vs plural "2 bags", fractional packs, requested-vs-sent in packs, unknown-item fallback) — 39 tests passing, up from 33
+- Deliberately left `BranchHistoryScreen`'s ledger view alone — it already labels its raw piece counts clearly (`"Dumplings (pcs)"`) and is a precise historical record by design (Phase 13), not something read to act on in packs
+- `flutter analyze` clean, `flutter run -d chrome` compile/serve smoke test
+
+**Decisions made:**
+- Order items store only a raw piece quantity, never pack composition (a deliberate Phase 13 boundary — "packs are purely a UI convenience layered on top, not a second unit tracked through the system") — so display-time pack conversion has to join against the live stock catalog rather than reading it off the order itself, and degrades to a bare piece count if the catalog item's since been deleted
+
+**Issues & resolutions:**
+- None new. Same verification caveat as Phases 18–19 — no live browser click-through was possible in this environment, so it's worth actually opening the kitchen prepare dialog on a real packaged item and confirming the pack math looks right before relying on it

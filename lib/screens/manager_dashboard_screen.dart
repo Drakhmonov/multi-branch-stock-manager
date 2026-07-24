@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
+import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../models/stock_movement_model.dart';
 import '../services/auth_service.dart';
@@ -253,6 +254,8 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
       .streamBranchNames();
   late final Stream<List<OrderModel>> _ordersStream = _firestoreService
       .streamOrders();
+  late final Stream<List<StockItemModel>> _stockItemsStream = _firestoreService
+      .streamStockItems();
 
   String _statusLabel(OrderStatus status) {
     switch (status) {
@@ -286,45 +289,57 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Map<String, String>>(
-      stream: _branchNamesStream,
-      builder: (context, branchSnapshot) {
-        final branchNames = branchSnapshot.data ?? <String, String>{};
+    return StreamBuilder<List<StockItemModel>>(
+      stream: _stockItemsStream,
+      builder: (context, stockSnapshot) {
+        final catalogById = {
+          for (final c in stockSnapshot.data ?? <StockItemModel>[]) c.id: c,
+        };
 
-        return StreamBuilder<List<OrderModel>>(
-          stream: _ordersStream,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return StreamErrorView(error: snapshot.error);
-            }
+        return StreamBuilder<Map<String, String>>(
+          stream: _branchNamesStream,
+          builder: (context, branchSnapshot) {
+            final branchNames = branchSnapshot.data ?? <String, String>{};
 
-            final orders = snapshot.data ?? [];
-            if (orders.isEmpty) {
-              return const Center(child: Text('No orders yet.'));
-            }
+            return StreamBuilder<List<OrderModel>>(
+              stream: _ordersStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return StreamErrorView(error: snapshot.error);
+                }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final order = orders[index];
-                final branchName = branchNames[order.branchId] ?? order.branchId;
-                return Card(
-                  color: _statusColor(context, order.status),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    onTap: () => showOrderDetailSheet(
-                      context,
-                      initialOrder: order,
-                      branchName: branchName,
-                    ),
-                    title: Text(branchName),
-                    subtitle: Text(orderItemsSummary(order.items)),
-                    trailing: Text(_statusLabel(order.status)),
-                  ),
+                final orders = snapshot.data ?? [];
+                if (orders.isEmpty) {
+                  return const Center(child: Text('No orders yet.'));
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: orders.length,
+                  itemBuilder: (context, index) {
+                    final order = orders[index];
+                    final branchName =
+                        branchNames[order.branchId] ?? order.branchId;
+                    return Card(
+                      color: _statusColor(context, order.status),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        onTap: () => showOrderDetailSheet(
+                          context,
+                          initialOrder: order,
+                          branchName: branchName,
+                        ),
+                        title: Text(branchName),
+                        subtitle: Text(
+                          orderItemsSummary(order.items, catalogById),
+                        ),
+                        trailing: Text(_statusLabel(order.status)),
+                      ),
+                    );
+                  },
                 );
               },
             );
