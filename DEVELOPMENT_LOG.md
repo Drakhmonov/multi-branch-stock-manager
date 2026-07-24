@@ -463,3 +463,31 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None new. Same verification caveat as Phases 18–19 — no live browser click-through was possible in this environment, so it's worth actually opening the kitchen prepare dialog on a real packaged item and confirming the pack math looks right before relying on it
+
+-----------
+
+## Phase 21 — Split "preparing" into Start Preparing / Ready to Deliver
+**Dates:** 25 July 2026
+
+**Goal:** Kitchen had one action, "Prepare," that did everything at once — opened the quantity-adjustment dialog, deducted central stock, and jumped the order straight from `requested` to `preparing`, which was actually the last state kitchen ever set (delivery picked up straight from there). There was no way to signal "we've started on this" separately from "this is boxed and ready to go," and no status anyone else could see in between. User-requested: split into two real kitchen actions with a new status in between, reflected consistently across every screen that shows order status.
+
+**Completed:**
+- `OrderStatus`: inserted `prepared` between `preparing` and `delivered`
+- `OrderModel`: renamed `preparedByName` → `preparingByName` (it captured the old single "advance to preparing" step, which under the new semantics is the **Start Preparing** step — the name now says what it means); added `preparedAt`/`preparedByName`/`preparedNote` for the new **Ready to Deliver** step, where fulfilled-quantity finalization now happens
+- `FirestoreService`: added `startPreparing(orderId, performedByName, {note})` — a simple status-only update (`requested → preparing`), no stock movement, mirroring `markDelivered`'s shape. Renamed `prepareOrder()` → `markPrepared()`; same transaction body (deduct central stock by `fulfilledQuantity`, log `orderDeducted` movements, persist the edited `items` list) but now guards/sets `preparing → prepared` instead of `requested → preparing`
+- `KitchenDashboardScreen`: three sections instead of two — **Requested** (new lightweight "Start Preparing" button via the shared `showConfirmWithNoteDialog`, no quantity editing), **Preparing** (the existing quantity-adjustment dialog, retitled "Ready to Deliver," now fires here instead of at Requested), **Prepared / awaiting delivery** (read-only, same shape the old "awaiting delivery" section had) — this is the literal "add prepared items" ask
+- `DeliveryScreen`'s "Ready for delivery" section now filters on `prepared` instead of `preparing`
+- `receive_delivery_screen.dart` (branch's Orders tab) gained a "Prepared" section between Preparing and Receive Order, tinted `primaryContainer` to stay visually distinct from Preparing's `tertiaryContainer`
+- `ManagerDashboardScreen`'s Orders tab: added `prepared` to both the status label and status color mapping (`primaryContainer`, matching the branch screen's choice)
+- `OrderStatusTimeline`: inserted a "Prepared" step between "Preparing" and "Delivered," wired to the new fields; "Preparing" step now reads the renamed `preparingByName`
+- Updated `firestore.rules`: kitchen now has two guarded transitions (`requested → preparing` with only status/preparingAt/preparingByName/preparingNote; `preparing → prepared` with the `items` rewrite allowance that used to live on the single kitchen transition); delivery's precondition moved from `preparing` to `prepared`. Redeployed
+- Fixed `test/models/order_model_test.dart` and `test/widgets/order_status_timeline_test.dart`, both of which had stopped testing what they claimed to — `flutter analyze` passed and the suite stayed green through the rename because the old field name (`preparedByName`) still compiled, just against a different step's meaning now; the tests needed updating by hand to actually cover both steps distinctly, not just kept passing by accident
+- `flutter analyze` clean, 40 tests passing (up from 39), `flutter run -d chrome` compile/serve smoke test
+
+**Decisions made:**
+- Quantity finalization and stock deduction stay at the *second* kitchen action, not the first — "Start Preparing" is a quick acknowledgement with no numbers attached, since what's actually being sent typically isn't known until the order is being boxed up, not when work begins
+- New items can still only be added at the "Ready to Deliver" step, same as before — that's still the point fulfillment is actually decided, just renamed/retriggered rather than moved
+
+**Issues & resolutions:**
+- Caught during verification, not by tests: after the enum/field rename, `flutter analyze` and the full suite stayed green even though `order_model_test.dart` was silently exercising the wrong step's semantics (old field name, new meaning) — worth remembering that a passing suite after a rename doesn't by itself prove the rename was propagated correctly everywhere it mattered; had to manually check the test fixtures actually covered both new fields, not just compiled against them
+- No live browser click-through was possible in this environment (same recurring caveat) — worth manually walking start-preparing → ready-to-deliver → deliver → confirm before relying on this

@@ -1,4 +1,4 @@
-enum OrderStatus { requested, preparing, delivered, received, cancelled }
+enum OrderStatus { requested, preparing, prepared, delivered, received, cancelled }
 
 class OrderItem {
   final String stockItemId;
@@ -39,8 +39,11 @@ class OrderModel {
   final String placedByName;
   final String? note;
   final DateTime? preparingAt;
-  final String? preparedByName;
+  final String? preparingByName;
   final String? preparingNote;
+  final DateTime? preparedAt;
+  final String? preparedByName;
+  final String? preparedNote;
   final DateTime? deliveredAt;
   final String? deliveredByName;
   final String? deliveredNote;
@@ -57,8 +60,11 @@ class OrderModel {
     this.placedByName = 'Unknown',
     this.note,
     this.preparingAt,
-    this.preparedByName,
+    this.preparingByName,
     this.preparingNote,
+    this.preparedAt,
+    this.preparedByName,
+    this.preparedNote,
     this.deliveredAt,
     this.deliveredByName,
     this.deliveredNote,
@@ -75,8 +81,11 @@ class OrderModel {
     'placedByName': placedByName,
     if (note != null) 'note': note,
     if (preparingAt != null) 'preparingAt': preparingAt!.toIso8601String(),
-    if (preparedByName != null) 'preparedByName': preparedByName,
+    if (preparingByName != null) 'preparingByName': preparingByName,
     if (preparingNote != null) 'preparingNote': preparingNote,
+    if (preparedAt != null) 'preparedAt': preparedAt!.toIso8601String(),
+    if (preparedByName != null) 'preparedByName': preparedByName,
+    if (preparedNote != null) 'preparedNote': preparedNote,
     if (deliveredAt != null) 'deliveredAt': deliveredAt!.toIso8601String(),
     if (deliveredByName != null) 'deliveredByName': deliveredByName,
     if (deliveredNote != null) 'deliveredNote': deliveredNote,
@@ -101,8 +110,13 @@ class OrderModel {
     preparingAt: map['preparingAt'] != null
         ? DateTime.parse(map['preparingAt'])
         : null,
-    preparedByName: map['preparedByName'],
+    preparingByName: map['preparingByName'],
     preparingNote: map['preparingNote'],
+    preparedAt: map['preparedAt'] != null
+        ? DateTime.parse(map['preparedAt'])
+        : null,
+    preparedByName: map['preparedByName'],
+    preparedNote: map['preparedNote'],
     deliveredAt: map['deliveredAt'] != null
         ? DateTime.parse(map['deliveredAt'])
         : null,

@@ -53,8 +53,11 @@ void main() {
       placedByName: 'Branch Staff',
       note: 'Please deliver before lunch',
       preparingAt: DateTime(2026, 7, 24, 8, 30),
+      preparingByName: 'Kitchen Staff',
+      preparingNote: 'Started on the dumplings first',
+      preparedAt: DateTime(2026, 7, 24, 8, 45),
       preparedByName: 'Kitchen Staff',
-      preparingNote: 'Substituted brand',
+      preparedNote: 'Substituted brand',
       deliveredAt: DateTime(2026, 7, 24, 9, 0),
       deliveredByName: 'Delivery Staff',
       deliveredNote: 'Left at back door',
@@ -73,8 +76,11 @@ void main() {
       expect(restored.placedByName, 'Branch Staff');
       expect(restored.note, 'Please deliver before lunch');
       expect(restored.preparingAt, DateTime(2026, 7, 24, 8, 30));
+      expect(restored.preparingByName, 'Kitchen Staff');
+      expect(restored.preparingNote, 'Started on the dumplings first');
+      expect(restored.preparedAt, DateTime(2026, 7, 24, 8, 45));
       expect(restored.preparedByName, 'Kitchen Staff');
-      expect(restored.preparingNote, 'Substituted brand');
+      expect(restored.preparedNote, 'Substituted brand');
       expect(restored.deliveredAt, DateTime(2026, 7, 24, 9, 0));
       expect(restored.deliveredByName, 'Delivery Staff');
       expect(restored.deliveredNote, 'Left at back door');
@@ -99,6 +105,7 @@ void main() {
 
         expect(restored.status, OrderStatus.requested);
         expect(restored.preparingAt, isNull);
+        expect(restored.preparedAt, isNull);
         expect(restored.deliveredAt, isNull);
         expect(restored.receivedAt, isNull);
         expect(restored.note, isNull);
@@ -118,6 +125,20 @@ void main() {
         expect(restored.placedByName, 'Unknown');
       },
     );
+
+    test('the prepared status (between preparing and delivered) round-trips', () {
+      final order = OrderModel(
+        id: 'o5',
+        branchId: 'branch1',
+        items: const [],
+        status: OrderStatus.prepared,
+        createdAt: DateTime(2026, 1, 1),
+      );
+
+      final restored = OrderModel.fromMap('o5', order.toMap());
+
+      expect(restored.status, OrderStatus.prepared);
+    });
 
     test('unknown or missing status falls back to requested', () {
       final restored = OrderModel.fromMap('o4', {

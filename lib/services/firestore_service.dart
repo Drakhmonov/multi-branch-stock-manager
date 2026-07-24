@@ -196,18 +196,35 @@ class FirestoreService {
     );
   }
 
-  /// Kitchen prepares an order: deducts central stock for each item, marks it preparing.
+  /// Kitchen acknowledges an order and starts on it: no numbers are
+  /// finalized and no stock moves yet — that happens in [markPrepared] once
+  /// it's actually ready to go out.
+  Future<void> startPreparing(
+    String orderId,
+    String performedByName, {
+    String? note,
+  }) async {
+    await _db.collection('orders').doc(orderId).update({
+      'status': OrderStatus.preparing.name,
+      'preparingAt': DateTime.now().toIso8601String(),
+      'preparingByName': performedByName,
+      if (note != null && note.isNotEmpty) 'preparingNote': note,
+    });
+  }
+
+  /// Kitchen marks an order ready for delivery: deducts central stock for
+  /// each item, marks it prepared.
   /// [editedItems] is the (possibly quantity-adjusted, possibly extended with
-  /// items not originally requested) list kitchen confirmed in the prepare
-  /// dialog — every line must already have `fulfilledQuantity` set. Stock is
-  /// deducted by `fulfilledQuantity`, not the original `quantity`, and the
-  /// edited list is persisted back onto the order so later steps (and the
-  /// detail view) see what was actually sent.
+  /// items not originally requested) list kitchen confirmed in the
+  /// ready-to-deliver dialog — every line must already have
+  /// `fulfilledQuantity` set. Stock is deducted by `fulfilledQuantity`, not
+  /// the original `quantity`, and the edited list is persisted back onto the
+  /// order so later steps (and the detail view) see what was actually sent.
   /// Reads every item doc first, then writes — Firestore transactions
   /// reject any read that happens after a write in the same transaction,
   /// which an interleaved read/write-per-item loop hits as soon as an
   /// order has more than one item.
-  Future<void> prepareOrder(
+  Future<void> markPrepared(
     OrderModel order,
     List<OrderItem> editedItems,
     String performedBy,
@@ -250,11 +267,11 @@ class FirestoreService {
       }
 
       tx.update(_db.collection('orders').doc(order.id), {
-        'status': OrderStatus.preparing.name,
+        'status': OrderStatus.prepared.name,
         'items': editedItems.map((i) => i.toMap()).toList(),
-        'preparingAt': DateTime.now().toIso8601String(),
+        'preparedAt': DateTime.now().toIso8601String(),
         'preparedByName': performedByName,
-        if (note != null && note.isNotEmpty) 'preparingNote': note,
+        if (note != null && note.isNotEmpty) 'preparedNote': note,
       });
     });
   }

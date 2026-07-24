@@ -12,9 +12,9 @@ class _Step {
 }
 
 /// Vertical stepper showing an order's full journey — requested, preparing,
-/// delivered, received — with the timestamp (and actor, where recorded) for
-/// each step already reached, so any role can see the whole history in one
-/// place instead of just the slice their own screen tracks.
+/// prepared, delivered, received — with the timestamp (and actor, where
+/// recorded) for each step already reached, so any role can see the whole
+/// history in one place instead of just the slice their own screen tracks.
 class OrderStatusTimeline extends StatelessWidget {
   final OrderModel order;
 
@@ -32,8 +32,14 @@ class OrderStatusTimeline extends StatelessWidget {
       _Step(
         label: 'Preparing',
         at: order.preparingAt,
-        byName: order.preparedByName,
+        byName: order.preparingByName,
         note: order.preparingNote,
+      ),
+      _Step(
+        label: 'Prepared',
+        at: order.preparedAt,
+        byName: order.preparedByName,
+        note: order.preparedNote,
       ),
       _Step(
         label: 'Delivered',

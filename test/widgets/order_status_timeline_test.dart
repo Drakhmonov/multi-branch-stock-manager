@@ -26,9 +26,10 @@ void main() {
 
     await pumpTimeline(tester, order);
 
-    // All four step labels are always shown, reached or not.
+    // All five step labels are always shown, reached or not.
     expect(find.text('Requested'), findsOneWidget);
     expect(find.text('Preparing'), findsOneWidget);
+    expect(find.text('Prepared'), findsOneWidget);
     expect(find.text('Delivered'), findsOneWidget);
     expect(find.text('Received'), findsOneWidget);
 
@@ -36,12 +37,12 @@ void main() {
     expect(find.textContaining('by Branch Staff'), findsOneWidget);
 
     // Reached steps get a filled check; unreached steps stay outlined —
-    // one check (Requested) and three outlined circles (the rest).
+    // one check (Requested) and four outlined circles (the rest).
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
-    expect(find.byIcon(Icons.radio_button_unchecked), findsNWidgets(3));
+    expect(find.byIcon(Icons.radio_button_unchecked), findsNWidgets(4));
   });
 
-  testWidgets('a fully received order shows all four steps with their notes', (
+  testWidgets('a fully received order shows all five steps with their notes', (
     tester,
   ) async {
     final order = OrderModel(
@@ -53,8 +54,11 @@ void main() {
       placedByName: 'Branch Staff',
       note: 'Please deliver before lunch',
       preparingAt: DateTime(2026, 7, 24, 8, 30),
+      preparingByName: 'Kitchen Staff',
+      preparingNote: 'Started on the dumplings first',
+      preparedAt: DateTime(2026, 7, 24, 8, 45),
       preparedByName: 'Kitchen Staff',
-      preparingNote: 'Substituted brand',
+      preparedNote: 'Substituted brand',
       deliveredAt: DateTime(2026, 7, 24, 9, 0),
       deliveredByName: 'Delivery Staff',
       deliveredNote: 'Left at back door',
@@ -65,10 +69,11 @@ void main() {
 
     await pumpTimeline(tester, order);
 
-    expect(find.byIcon(Icons.check_circle), findsNWidgets(4));
+    expect(find.byIcon(Icons.check_circle), findsNWidgets(5));
     expect(find.byIcon(Icons.radio_button_unchecked), findsNothing);
 
     expect(find.text('"Please deliver before lunch"'), findsOneWidget);
+    expect(find.text('"Started on the dumplings first"'), findsOneWidget);
     expect(find.text('"Substituted brand"'), findsOneWidget);
     expect(find.text('"Left at back door"'), findsOneWidget);
     expect(find.text('"All correct"'), findsOneWidget);

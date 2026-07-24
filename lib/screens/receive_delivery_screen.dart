@@ -112,6 +112,9 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
             final preparing = orders
                 .where((o) => o.status == OrderStatus.preparing)
                 .toList();
+            final prepared = orders
+                .where((o) => o.status == OrderStatus.prepared)
+                .toList();
             final toReceive = orders
                 .where((o) => o.status == OrderStatus.delivered)
                 .toList();
@@ -141,6 +144,20 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
                     order,
                     catalogById,
                     color: Theme.of(context).colorScheme.tertiaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Prepared (${prepared.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if (prepared.isEmpty) const Text('Nothing ready yet.'),
+                ...prepared.map(
+                  (order) => _orderCard(
+                    order,
+                    catalogById,
+                    color: Theme.of(context).colorScheme.primaryContainer,
                   ),
                 ),
                 const SizedBox(height: 24),

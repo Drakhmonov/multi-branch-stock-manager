@@ -263,6 +263,8 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
         return 'Requested';
       case OrderStatus.preparing:
         return 'Preparing';
+      case OrderStatus.prepared:
+        return 'Prepared';
       case OrderStatus.delivered:
         return 'Delivered';
       case OrderStatus.received:
@@ -277,6 +279,8 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
     switch (status) {
       case OrderStatus.preparing:
         return scheme.tertiaryContainer;
+      case OrderStatus.prepared:
+        return scheme.primaryContainer;
       case OrderStatus.delivered:
         return scheme.secondaryContainer;
       case OrderStatus.received:

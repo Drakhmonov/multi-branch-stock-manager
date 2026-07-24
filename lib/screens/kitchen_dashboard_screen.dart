@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/format.dart';
 import '../widgets/adaptive_nav_shell.dart';
+import '../widgets/confirm_with_note_dialog.dart';
 import '../widgets/stream_error_view.dart';
 import 'order_detail_sheet.dart';
 import 'stock_catalog_screen.dart';
@@ -92,7 +93,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
       .streamStockItems();
   final Set<String> _processingIds = {};
 
-  Future<(List<OrderItem>, String?)?> _showPrepareDialog(
+  Future<(List<OrderItem>, String?)?> _showReadyToDeliverDialog(
     OrderModel order,
     List<StockItemModel> catalog,
   ) {
@@ -153,7 +154,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
             }
 
             return AlertDialog(
-              title: const Text('Prepare Order'),
+              title: const Text('Ready to Deliver'),
               content: SizedBox(
                 width: 400,
                 child: SingleChildScrollView(
@@ -302,7 +303,10 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
-                FilledButton(onPressed: submit, child: const Text('Prepare')),
+                FilledButton(
+                  onPressed: submit,
+                  child: const Text('Ready to Deliver'),
+                ),
               ],
             );
           },
@@ -311,17 +315,48 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
     );
   }
 
-  Future<void> _handlePrepare(
+  Future<void> _handleStartPreparing(OrderModel order) async {
+    final note = await showConfirmWithNoteDialog(
+      context,
+      title: 'Start Preparing',
+      actionLabel: 'Start Preparing',
+    );
+    if (note == null) return;
+
+    setState(() => _processingIds.add(order.id));
+    try {
+      await _firestoreService.startPreparing(
+        order.id,
+        widget.currentUser.name,
+        note: note,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order marked as preparing.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update order: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingIds.remove(order.id));
+    }
+  }
+
+  Future<void> _handleReadyToDeliver(
     OrderModel order,
     List<StockItemModel> catalog,
   ) async {
-    final result = await _showPrepareDialog(order, catalog);
+    final result = await _showReadyToDeliverDialog(order, catalog);
     if (result == null) return;
     final (editedItems, note) = result;
 
     setState(() => _processingIds.add(order.id));
     try {
-      await _firestoreService.prepareOrder(
+      await _firestoreService.markPrepared(
         order,
         editedItems,
         widget.currentUser.id,
@@ -331,7 +366,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Order marked as preparing. Stock deducted.'),
+            content: Text('Order marked as prepared. Stock deducted.'),
           ),
         );
       }
@@ -378,6 +413,9 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                 final preparing = snapshot.data!
                     .where((o) => o.status == OrderStatus.preparing)
                     .toList();
+                final prepared = snapshot.data!
+                    .where((o) => o.status == OrderStatus.prepared)
+                    .toList();
 
                 return ListView(
                   padding: const EdgeInsets.all(12),
@@ -405,7 +443,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                           trailing: ElevatedButton(
                             onPressed: _processingIds.contains(order.id)
                                 ? null
-                                : () => _handlePrepare(order, catalog),
+                                : () => _handleStartPreparing(order),
                             child: _processingIds.contains(order.id)
                                 ? const SizedBox(
                                     width: 16,
@@ -414,14 +452,14 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Text('Prepare'),
+                                : const Text('Start Preparing'),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Preparing / awaiting delivery (${preparing.length})',
+                      'Preparing (${preparing.length})',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -430,6 +468,45 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                     ...preparing.map(
                       (order) => Card(
                         color: Theme.of(context).colorScheme.tertiaryContainer,
+                        child: ListTile(
+                          onTap: () => showOrderDetailSheet(
+                            context,
+                            initialOrder: order,
+                            branchName: branchNames[order.branchId],
+                          ),
+                          title: Text(
+                            'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                          ),
+                          subtitle: Text(
+                            orderItemsSummary(order.items, catalogById),
+                          ),
+                          trailing: ElevatedButton(
+                            onPressed: _processingIds.contains(order.id)
+                                ? null
+                                : () => _handleReadyToDeliver(order, catalog),
+                            child: _processingIds.contains(order.id)
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Ready to Deliver'),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Prepared / awaiting delivery (${prepared.length})',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    if (prepared.isEmpty) const Text('Nothing ready yet.'),
+                    ...prepared.map(
+                      (order) => Card(
+                        color: Theme.of(context).colorScheme.primaryContainer,
                         child: ListTile(
                           onTap: () => showOrderDetailSheet(
                             context,

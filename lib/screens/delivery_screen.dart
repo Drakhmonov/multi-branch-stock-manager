@@ -109,7 +109,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                     }
 
                     final readyForDelivery = snapshot.data!
-                        .where((o) => o.status == OrderStatus.preparing)
+                        .where((o) => o.status == OrderStatus.prepared)
                         .toList();
                     final delivered = snapshot.data!
                         .where((o) => o.status == OrderStatus.delivered)
