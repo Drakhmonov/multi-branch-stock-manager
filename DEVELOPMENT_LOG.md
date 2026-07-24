@@ -418,3 +418,26 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None. As in recent phases, verification stayed at `flutter analyze` + `flutter test` + a compile/serve smoke test — the browser extension still isn't connected in this environment, so the actual visual result hasn't been eyeballed by either of us yet; worth a quick look before treating this as final, since exact tonal hues from `ColorScheme.fromSeed` can only really be judged by looking at them
+
+-----------
+
+## Phase 19 — Branch comparison chart on the manager dashboard
+**Dates:** 24 July 2026
+
+**Goal:** The manager dashboard's "By branch" section was a flat list of `Sold: £X   Wasted: £Y` text per branch — exactly the kind of comparison that's slow to scan and easy to miss an outlier in. Add a chart to make cross-branch comparison genuinely useful for spotting a problem branch at a glance, per the user's own framing (chosen over dark-mode/animations/etc. as the actual value-add for decision-making).
+
+**Completed:**
+- Added the `fl_chart` package (the standard Flutter charting library) — first new dependency beyond Firebase since Phase 0
+- Added `BranchComparisonChart` (`lib/widgets/branch_comparison_chart.dart`): a grouped bar chart, one group per branch, Sold vs Wasted value as two bars per group, with a tap tooltip and a legend
+- Colors chosen deliberately, not picked by eye: sold/wasted are two independent magnitudes, not a status, so rather than an intuitive-but-arbitrary red/green pairing they get the first two slots of a fixed categorical color order, validated colorblind-safe by running the six-check validator script (`worst adjacent ΔE 24.7 protan / 33.6 normal-vision`, both well clear of the safety floor) rather than eyeballed
+- Y-axis rounds to a clean max (1/2/5 × a power of ten — `_niceMaxY`) so gridlines land on round £ values instead of an arbitrary max like "£1,347"
+- Wired into `ManagerDashboardScreen`'s `_ManagerDashboardBody`, between the waste-rate card and the existing "By branch" list — the chart handles at-a-glance comparison, the list stays underneath as the exact-figures table view, per branch totals now computed once (`branchTotals`) and shared between both instead of being duplicated
+- `flutter analyze` clean, `flutter test` (33 passing, unaffected), `flutter run -d chrome` compile/serve smoke test
+
+**Decisions made:**
+- Grouped (clustered) bars, not stacked — sold+wasted stacked would visually imply a combined "total" that isn't a meaningful business figure; grouped keeps the two magnitudes directly comparable per branch without a misleading implied sum
+- Picked `fl_chart` over a hand-rolled bar widget when asked — one new dependency, but it's pure client-side with no billing/cost implications (unlike the Cloud Functions avoided since Phase 0), and gives tap tooltips and clean axis rendering for a lot less code than building it by hand
+- Kept the existing per-branch list rather than replacing it with the chart — the chart is for spotting an outlier fast; the list is still what you'd read for an exact number, consistent with treating a chart as an addition to, not a replacement for, the underlying data
+
+**Issues & resolutions:**
+- None. Verification stayed at the same level as recent phases (analyze/test/compile-serve, no live browser click-through) — worth actually looking at the rendered chart before relying on it, same caveat as Phase 18's theme work

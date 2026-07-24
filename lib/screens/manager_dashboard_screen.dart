@@ -7,6 +7,7 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/adaptive_nav_shell.dart';
+import '../widgets/branch_comparison_chart.dart';
 import '../widgets/stream_error_view.dart';
 import 'branch_management_screen.dart';
 import 'order_detail_sheet.dart';
@@ -136,6 +137,25 @@ class _ManagerDashboardBodyState extends State<_ManagerDashboardBody> {
                     ...wasted.map((m) => m.branchId),
                   }.whereType<String>().toList()..sort();
 
+                  final branchTotals = [
+                    for (final branchId in branchIds)
+                      (
+                        branchId: branchId,
+                        sold: sold
+                            .where((m) => m.branchId == branchId)
+                            .fold<double>(
+                              0,
+                              (sum, m) => sum + m.quantity * m.costAtTime,
+                            ),
+                        wasted: wasted
+                            .where((m) => m.branchId == branchId)
+                            .fold<double>(
+                              0,
+                              (sum, m) => sum + m.quantity * m.costAtTime,
+                            ),
+                      ),
+                  ];
+
                   return ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
@@ -173,38 +193,41 @@ class _ManagerDashboardBodyState extends State<_ManagerDashboardBody> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
-                      if (branchIds.isEmpty)
+                      if (branchTotals.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 16),
                           child: Text(
                             'No sold/wasted activity in this period.',
                           ),
                         )
-                      else
-                        ...branchIds.map((branchId) {
-                          final branchSoldCost = sold
-                              .where((m) => m.branchId == branchId)
-                              .fold<double>(
-                                0,
-                                (sum, m) => sum + m.quantity * m.costAtTime,
-                              );
-                          final branchWastedCost = wasted
-                              .where((m) => m.branchId == branchId)
-                              .fold<double>(
-                                0,
-                                (sum, m) => sum + m.quantity * m.costAtTime,
-                              );
-                          return Card(
+                      else ...[
+                        BranchComparisonChart(
+                          data: [
+                            for (final b in branchTotals)
+                              BranchComparisonData(
+                                branchName:
+                                    branchNames[b.branchId] ?? b.branchId,
+                                sold: b.sold,
+                                wasted: b.wasted,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        ...branchTotals.map(
+                          (b) => Card(
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
-                              title: Text(branchNames[branchId] ?? branchId),
+                              title: Text(
+                                branchNames[b.branchId] ?? b.branchId,
+                              ),
                               subtitle: Text(
-                                'Sold: £${branchSoldCost.toStringAsFixed(2)}   '
-                                'Wasted: £${branchWastedCost.toStringAsFixed(2)}',
+                                'Sold: £${b.sold.toStringAsFixed(2)}   '
+                                'Wasted: £${b.wasted.toStringAsFixed(2)}',
                               ),
                             ),
-                          );
-                        }),
+                          ),
+                        ),
+                      ],
                     ],
                   );
                 },
