@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'theme/app_theme.dart';
 import 'models/user_model.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -53,10 +54,8 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       scaffoldMessengerKey: _scaffoldMessengerKey,
       title: 'Multi-Branch Stock Manager',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      debugShowCheckedModeBanner: false,
+      theme: buildAppTheme(),
       home: _currentUser == null
           ? (_showSignUp
                 ? SignUpScreen(

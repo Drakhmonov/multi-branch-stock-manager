@@ -462,14 +462,15 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
                             final lowStock =
                                 item.currentQty <= item.reorderThreshold;
 
+                            final scheme = Theme.of(context).colorScheme;
                             return Card(
-                              color: lowStock ? Colors.red[50] : null,
+                              color: lowStock ? scheme.errorContainer : null,
                               margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
                                 leading: lowStock
-                                    ? const Icon(
+                                    ? Icon(
                                         Icons.warning_amber,
-                                        color: Colors.red,
+                                        color: scheme.onErrorContainer,
                                       )
                                     : const Icon(Icons.inventory_2_outlined),
                                 title: Text(item.name),

@@ -3,6 +3,7 @@ import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/confirm_with_note_dialog.dart';
 import '../widgets/responsive_body.dart';
@@ -152,7 +153,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                     if (delivered.isEmpty) const Text('No deliveries yet.'),
                     ...delivered.map(
                       (order) => Card(
-                        color: Colors.green[50],
+                        color: Theme.of(
+                          context,
+                        ).extension<StatusColors>()!.successContainer,
                         child: ListTile(
                           onTap: () => showOrderDetailSheet(
                             context,

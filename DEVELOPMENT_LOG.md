@@ -396,3 +396,25 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 **Issues & resolutions:**
 - Confirmed the pre-existing test actually failed (`flutter test` before this phase: 0 passing, 1 failing) rather than just assuming it was stale — worth having actually run it rather than taking "probably broken" on faith
 - The `formatQty` bug is a good illustration of why the tests were worth writing: it wasn't caught by 16 phases of manual testing or `flutter analyze`, only by writing a test that pinned down the exact expected string
+
+-----------
+
+## Phase 18 — Visual polish pass
+**Dates:** 24 July 2026
+
+**Goal:** The UI had been functionally complete since Phase 12's responsive/adaptive-nav work but visually plain — default Material widgets with status colors picked ad hoc per screen (`Colors.amber[50]`, `Colors.green[50]`, `Colors.red[50]`, `Colors.blue[50]`) that had no relationship to the app's actual seeded color scheme. Also removed the debug banner, which had been sitting in the corner of every screenshot/demo since Phase 1.
+
+**Completed:**
+- `debugShowCheckedModeBanner: false` in `main.dart`
+- Added `lib/theme/app_theme.dart`: a proper `ThemeData` (moved out of the inline `ThemeData(...)` that had been sitting directly in `main.dart` since Phase 1) with `cardTheme`, `inputDecorationTheme`, `elevatedButtonTheme`/`filledButtonTheme`, `dialogTheme`, `navigationRailTheme`/`navigationBarTheme`, and `appBarTheme` all set consistently — rounded corners, flat/tonal surfaces instead of hard drop shadows, filled form fields
+- Added a `StatusColors` `ThemeExtension` for the one semantic role Material 3 doesn't ship by default (a "success" green) — registered on the theme so it stays seeded/harmonious rather than a raw literal color
+- Replaced every ad hoc status color with a theme-derived one: `tertiaryContainer` for "preparing", `secondaryContainer` for "delivered" (manager's cross-branch view only, which needs to distinguish all four statuses at once), the new `StatusColors.successContainer` for each role's own terminal "done" state, `errorContainer` for low-stock warnings — across `KitchenDashboardScreen`, `DeliveryScreen`, `ReceiveDeliveryScreen`, `ManagerDashboardScreen`, `StockCatalogScreen`
+- Normalized a handful of hardcoded `TextStyle(fontWeight: FontWeight.bold, fontSize: 16)`-style headings (manager dashboard's "By branch"/waste-rate card, the kitchen prepare dialog's section headings) to the theme's `textTheme` scale instead
+- Ran `flutter analyze` (clean), `flutter test` (33 passing, unaffected), and a `flutter run -d chrome` compile/serve smoke test
+
+**Decisions made:**
+- Scoped to "polished Material 3" rather than a custom/bespoke design system, per explicit direction — kept the existing component set (Card, ListTile, NavigationRail/Bar, AlertDialog) and made it feel intentional through theming, rather than replacing components or restructuring layouts
+- Used Material 3's own tonal container roles (`tertiaryContainer`, `secondaryContainer`, `errorContainer`) wherever they already fit the semantic need, and only added one custom color (`successContainer`, via a proper `ThemeExtension`) for the one role — a semantic "success" green — that Material 3 doesn't provide out of the box
+
+**Issues & resolutions:**
+- None. As in recent phases, verification stayed at `flutter analyze` + `flutter test` + a compile/serve smoke test — the browser extension still isn't connected in this environment, so the actual visual result hasn't been eyeballed by either of us yet; worth a quick look before treating this as final, since exact tonal hues from `ColorScheme.fromSeed` can only really be judged by looking at them

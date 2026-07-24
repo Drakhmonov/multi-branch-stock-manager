@@ -4,6 +4,7 @@ import '../models/user_model.dart';
 import '../models/stock_movement_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/adaptive_nav_shell.dart';
 import '../widgets/stream_error_view.dart';
@@ -157,21 +158,19 @@ class _ManagerDashboardBodyState extends State<_ManagerDashboardBody> {
                       ),
                       const SizedBox(height: 12),
                       Card(
+                        color: Theme.of(context).colorScheme.primaryContainer,
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text(
                             'Waste rate: ${wastePct.toStringAsFixed(1)}% of sold+wasted value',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: Theme.of(context).textTheme.titleSmall,
                           ),
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text(
+                      Text(
                         'By branch',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       if (branchIds.isEmpty)
@@ -247,14 +246,15 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
     }
   }
 
-  Color? _statusColor(OrderStatus status) {
+  Color? _statusColor(BuildContext context, OrderStatus status) {
+    final scheme = Theme.of(context).colorScheme;
     switch (status) {
       case OrderStatus.preparing:
-        return Colors.amber[50];
+        return scheme.tertiaryContainer;
       case OrderStatus.delivered:
-        return Colors.blue[50];
+        return scheme.secondaryContainer;
       case OrderStatus.received:
-        return Colors.green[50];
+        return Theme.of(context).extension<StatusColors>()!.successContainer;
       case OrderStatus.requested:
       case OrderStatus.cancelled:
         return null;
@@ -290,7 +290,7 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
                 final order = orders[index];
                 final branchName = branchNames[order.branchId] ?? order.branchId;
                 return Card(
-                  color: _statusColor(order.status),
+                  color: _statusColor(context, order.status),
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     onTap: () => showOrderDetailSheet(

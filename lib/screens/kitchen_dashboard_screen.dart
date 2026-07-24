@@ -137,9 +137,9 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Requested items',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: Theme.of(context).textTheme.titleSmall,
                       ),
                       const SizedBox(height: 8),
                       for (final item in order.items)
@@ -163,9 +163,9 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                         ),
                       if (addedLines.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           'Added items',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 8),
                         for (final line in addedLines)
@@ -382,7 +382,7 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                       const Text('Nothing in preparation.'),
                     ...preparing.map(
                       (order) => Card(
-                        color: Colors.amber[50],
+                        color: Theme.of(context).colorScheme.tertiaryContainer,
                         child: ListTile(
                           onTap: () => showOrderDetailSheet(
                             context,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/confirm_with_note_dialog.dart';
 import '../widgets/stream_error_view.dart';
@@ -121,7 +122,10 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
             const SizedBox(height: 8),
             if (preparing.isEmpty) const Text('Nothing in preparation.'),
             ...preparing.map(
-              (order) => _orderCard(order, color: Colors.amber[50]),
+              (order) => _orderCard(
+                order,
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+              ),
             ),
             const SizedBox(height: 24),
             Text(
@@ -154,13 +158,17 @@ class _ReceiveDeliveryScreenState extends State<ReceiveDeliveryScreen> {
             ),
             const SizedBox(height: 8),
             if (received.isEmpty) const Text('No order.'),
-            ...received.map(
-              (order) => _orderCard(
+            ...received.map((order) {
+              final statusColors = Theme.of(context).extension<StatusColors>()!;
+              return _orderCard(
                 order,
-                color: Colors.green[50],
-                trailing: const Icon(Icons.check_circle, color: Colors.green),
-              ),
-            ),
+                color: statusColors.successContainer,
+                trailing: Icon(
+                  Icons.check_circle,
+                  color: statusColors.onSuccessContainer,
+                ),
+              );
+            }),
           ],
         );
       },
