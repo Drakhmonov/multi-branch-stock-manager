@@ -491,3 +491,24 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 **Issues & resolutions:**
 - Caught during verification, not by tests: after the enum/field rename, `flutter analyze` and the full suite stayed green even though `order_model_test.dart` was silently exercising the wrong step's semantics (old field name, new meaning) — worth remembering that a passing suite after a rename doesn't by itself prove the rename was propagated correctly everywhere it mattered; had to manually check the test fixtures actually covered both new fields, not just compiled against them
 - No live browser click-through was possible in this environment (same recurring caveat) — worth manually walking start-preparing → ready-to-deliver → deliver → confirm before relying on this
+
+-----------
+
+## Phase 22 — Kitchen order history
+**Dates:** 25 July 2026
+
+**Goal:** User-reported: once an order left "prepared" (i.e. was delivered), it simply stopped appearing anywhere in the kitchen's Orders tab — that screen only ever renders the three active-work statuses, so a delivered order wasn't lost from Firestore, just invisible to kitchen staff with no way to look it back up.
+
+**Completed:**
+- Added a third "History" destination to `KitchenDashboardScreen`, alongside Orders and Stock Catalog
+- New `_KitchenHistoryBody`: streams all orders, filters to `delivered`/`received`, shows branch name + item summary + status chip per row, tappable to the same `showOrderDetailSheet` every other order card in the app already opens
+- Extracted `orderStatusLabel()`/`orderStatusColor()` into a new shared `lib/utils/order_status.dart`, replacing the private `_statusLabel`/`_statusColor` methods that had been living only on `ManagerDashboardScreen`'s `_ManagerOrdersBodyState` — the kitchen history view needed the exact same status-label/tint mapping, so this is now shared rather than about to become a second copy
+- Added `test/utils/order_status_test.dart` covering `orderStatusLabel` for all six statuses
+- `flutter analyze` clean, 41 tests passing (up from 40), `flutter run -d chrome` compile/serve smoke test
+
+**Decisions made:**
+- A flat chronological list (like `ManagerDashboardScreen`'s Orders tab), not grouped by status — this is a "look something up" view, not an action queue, so a single list ordered newest-first is more appropriate than the section-per-status pattern the active-work Orders tab uses
+- Scoped history to `delivered`/`received` only, not every status — the other three (requested/preparing/prepared) are already visible in the Orders tab's active-work sections; duplicating them into History would just be noise
+
+**Issues & resolutions:**
+- None. Same verification level as recent phases — `flutter analyze`/`flutter test`/compile-serve smoke test only, no live click-through in this environment

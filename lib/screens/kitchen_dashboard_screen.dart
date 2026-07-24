@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/format.dart';
+import '../utils/order_status.dart';
 import '../widgets/adaptive_nav_shell.dart';
 import '../widgets/confirm_with_note_dialog.dart';
 import '../widgets/stream_error_view.dart';
@@ -39,6 +40,11 @@ class KitchenDashboardScreen extends StatelessWidget {
           label: 'Stock Catalog',
           icon: Icons.inventory_2,
           contentBuilder: (_) => StockCatalogScreen(currentUser: currentUser),
+        ),
+        NavDestination(
+          label: 'History',
+          icon: Icons.history,
+          contentBuilder: (_) => const _KitchenHistoryBody(),
         ),
       ],
     );
@@ -524,6 +530,98 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                       ),
                     ),
                   ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Delivered/received orders — once an order moved past "prepared", it
+/// simply stopped appearing anywhere in the kitchen's Orders tab (which only
+/// ever shows the three active-work statuses). This gives kitchen a place to
+/// look an order up after it's left their hands.
+class _KitchenHistoryBody extends StatefulWidget {
+  const _KitchenHistoryBody();
+
+  @override
+  State<_KitchenHistoryBody> createState() => _KitchenHistoryBodyState();
+}
+
+class _KitchenHistoryBodyState extends State<_KitchenHistoryBody> {
+  final _firestoreService = FirestoreService();
+  late final Stream<Map<String, String>> _branchNamesStream = _firestoreService
+      .streamBranchNames();
+  late final Stream<List<OrderModel>> _ordersStream = _firestoreService
+      .streamOrders();
+  late final Stream<List<StockItemModel>> _stockItemsStream = _firestoreService
+      .streamStockItems();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<StockItemModel>>(
+      stream: _stockItemsStream,
+      builder: (context, stockSnapshot) {
+        final catalogById = {
+          for (final c in stockSnapshot.data ?? <StockItemModel>[]) c.id: c,
+        };
+
+        return StreamBuilder<Map<String, String>>(
+          stream: _branchNamesStream,
+          builder: (context, branchSnapshot) {
+            final branchNames = branchSnapshot.data ?? <String, String>{};
+
+            return StreamBuilder<List<OrderModel>>(
+              stream: _ordersStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return StreamErrorView(error: snapshot.error);
+                }
+
+                final history = (snapshot.data ?? [])
+                    .where(
+                      (o) =>
+                          o.status == OrderStatus.delivered ||
+                          o.status == OrderStatus.received,
+                    )
+                    .toList();
+
+                if (history.isEmpty) {
+                  return const Center(
+                    child: Text('No delivered orders yet.'),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: history.length,
+                  itemBuilder: (context, index) {
+                    final order = history[index];
+                    final branchName =
+                        branchNames[order.branchId] ?? order.branchId;
+                    return Card(
+                      color: orderStatusColor(context, order.status),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        onTap: () => showOrderDetailSheet(
+                          context,
+                          initialOrder: order,
+                          branchName: branchName,
+                        ),
+                        title: Text(branchName),
+                        subtitle: Text(
+                          orderItemsSummary(order.items, catalogById),
+                        ),
+                        trailing: Text(orderStatusLabel(order.status)),
+                      ),
+                    );
+                  },
                 );
               },
             );

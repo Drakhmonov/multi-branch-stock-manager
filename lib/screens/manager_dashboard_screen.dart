@@ -5,8 +5,8 @@ import '../models/user_model.dart';
 import '../models/stock_movement_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../theme/app_theme.dart';
 import '../utils/format.dart';
+import '../utils/order_status.dart';
 import '../widgets/adaptive_nav_shell.dart';
 import '../widgets/branch_comparison_chart.dart';
 import '../widgets/stream_error_view.dart';
@@ -257,40 +257,6 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
   late final Stream<List<StockItemModel>> _stockItemsStream = _firestoreService
       .streamStockItems();
 
-  String _statusLabel(OrderStatus status) {
-    switch (status) {
-      case OrderStatus.requested:
-        return 'Requested';
-      case OrderStatus.preparing:
-        return 'Preparing';
-      case OrderStatus.prepared:
-        return 'Prepared';
-      case OrderStatus.delivered:
-        return 'Delivered';
-      case OrderStatus.received:
-        return 'Received';
-      case OrderStatus.cancelled:
-        return 'Cancelled';
-    }
-  }
-
-  Color? _statusColor(BuildContext context, OrderStatus status) {
-    final scheme = Theme.of(context).colorScheme;
-    switch (status) {
-      case OrderStatus.preparing:
-        return scheme.tertiaryContainer;
-      case OrderStatus.prepared:
-        return scheme.primaryContainer;
-      case OrderStatus.delivered:
-        return scheme.secondaryContainer;
-      case OrderStatus.received:
-        return Theme.of(context).extension<StatusColors>()!.successContainer;
-      case OrderStatus.requested:
-      case OrderStatus.cancelled:
-        return null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<StockItemModel>>(
@@ -328,7 +294,7 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
                     final branchName =
                         branchNames[order.branchId] ?? order.branchId;
                     return Card(
-                      color: _statusColor(context, order.status),
+                      color: orderStatusColor(context, order.status),
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         onTap: () => showOrderDetailSheet(
@@ -340,7 +306,7 @@ class _ManagerOrdersBodyState extends State<_ManagerOrdersBody> {
                         subtitle: Text(
                           orderItemsSummary(order.items, catalogById),
                         ),
-                        trailing: Text(_statusLabel(order.status)),
+                        trailing: Text(orderStatusLabel(order.status)),
                       ),
                     );
                   },
