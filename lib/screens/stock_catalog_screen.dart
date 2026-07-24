@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
 import '../widgets/stream_error_view.dart';
 
 class StockCatalogScreen extends StatefulWidget {
@@ -26,9 +27,9 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
 
   String _stockLabel(StockItemModel item) {
     final qty = item.currentQty;
-    if (item.piecesPerPack <= 1) return '$qty ${item.pieceUnit}';
+    if (item.piecesPerPack <= 1) return '${formatQty(qty)} ${item.pieceUnit}';
     final packs = (qty / item.piecesPerPack).toStringAsFixed(1);
-    return '$qty ${item.pieceUnit} ($packs ${item.packLabel}s)';
+    return '${formatQty(qty)} ${item.pieceUnit} ($packs ${item.packLabel}s)';
   }
 
   Future<void> _showAddItemDialog() async {

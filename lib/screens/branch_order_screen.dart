@@ -3,6 +3,7 @@ import '../models/stock_item_model.dart';
 import '../models/order_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
 import '../widgets/stream_error_view.dart';
 
 class BranchOrderScreen extends StatefulWidget {
@@ -16,11 +17,11 @@ class BranchOrderScreen extends StatefulWidget {
 
 String _availableLabel(StockItemModel item) {
   if (item.piecesPerPack <= 1) {
-    return 'Available centrally: ${item.currentQty} ${item.pieceUnit}';
+    return 'Available centrally: ${formatQty(item.currentQty)} ${item.pieceUnit}';
   }
   final packs = (item.currentQty / item.piecesPerPack).toStringAsFixed(1);
   return 'Available centrally: $packs ${item.packLabel}(s) '
-      '(${item.currentQty} ${item.pieceUnit})';
+      '(${formatQty(item.currentQty)} ${item.pieceUnit})';
 }
 
 class _BranchOrderScreenState extends State<BranchOrderScreen> {

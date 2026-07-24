@@ -372,3 +372,27 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None. As in Phases 14–15, the browser extension wasn't connected in this environment, so verification stayed at `flutter analyze` + a compile/serve smoke test; a full manual walkthrough (place with a note → prepare with an adjusted quantity and an added item → deliver with a note → confirm with a note, checking the timeline and that branch stock reflects fulfilled rather than requested quantities) is still worth doing by hand
+
+-----------
+
+## Phase 17 — Automated test suite, and a real formatting bug it caught
+**Dates:** 24 July 2026
+
+**Goal:** The project had zero real test coverage — `test/widget_test.dart` was still Flutter's default counter-app smoke test, unrelated to this app entirely, and (confirmed by actually running it) already failing outright. Add a real automated test suite ahead of submission.
+
+**Completed:**
+- Deleted the stale default `test/widget_test.dart`
+- Added pure Dart unit tests for every model's `toMap`/`fromMap` round-trip and its fallback/defaulting behaviour for old or malformed data: `test/models/{branch,user,stock_item,stock_movement,order}_model_test.dart` — including `OrderModel`'s Phase 15/16 fields (e.g. pre-Phase-16 orders without `placedByName` falling back to `'Unknown'`, unknown `status`/`type` strings falling back to their safe defaults, `StockItemModel`'s legacy `unit`/`costPerUnit` fallbacks from Phase 13)
+- Added `test/utils/format_test.dart` covering `formatTimestamp` and `orderItemsSummary`
+- Added widget tests for the two presentational widgets that don't touch Firestore: `test/widgets/order_status_timeline_test.dart` (reached vs unreached steps, notes rendering) and `test/widgets/stream_error_view_test.dart`
+- Writing the `orderItemsSummary` tests surfaced a real, previously unnoticed bug: every quantity display in the app (`Buns x10`, `Available centrally: 40 pcs`, etc.) was actually rendering as `Buns x10.0` — `OrderItem.quantity`/`StockItemModel.currentQty`/`StockMovementModel.quantity` are all `double` (to allow fractional units like kg), and every screen interpolated them directly with no formatting. This wasn't a Phase 16 regression — the exact same pattern was there since `BranchOrderScreen` in Phase 5, just never noticed because nobody was asserting the exact display string until now
+- Fixed it properly rather than just in the tested function: added `formatQty()` to `lib/utils/format.dart` (shows a plain integer for whole numbers, keeps the decimal for genuinely fractional quantities) and applied it everywhere a raw quantity was being interpolated — `orderItemsSummary`, `BranchHistoryScreen`'s signed adjustment display, `BranchOrderScreen`'s "Available centrally" label, `StockCatalogScreen`'s stock label, and `DailyStockUpdateScreen`'s "Currently held" label
+- 33 tests passing, `flutter analyze` clean
+
+**Decisions made:**
+- Scoped tests to pure model logic and Firebase-free widgets only; deliberately did not add `fake_cloud_firestore` or a Firebase emulator to test `FirestoreService` or the screens that stream from it directly — that's real added complexity (and this project has already hit enough Windows-specific tooling friction, per Phases 1 and 11) for value that's lower priority than getting solid coverage on the parts that don't need it. Documented as a scoping decision, not an oversight, in case it's asked about
+- Prioritized model round-trip tests over UI snapshot-style tests: the model layer is where Phase 15/16's nullable-field fallback logic actually lives and is the highest-value thing to pin down before submission
+
+**Issues & resolutions:**
+- Confirmed the pre-existing test actually failed (`flutter test` before this phase: 0 passing, 1 failing) rather than just assuming it was stale — worth having actually run it rather than taking "probably broken" on faith
+- The `formatQty` bug is a good illustration of why the tests were worth writing: it wasn't caught by 16 phases of manual testing or `flutter analyze`, only by writing a test that pinned down the exact expected string

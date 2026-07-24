@@ -230,8 +230,10 @@ class _BranchHistoryScreenState extends State<BranchHistoryScreen> {
                     final m = movements[index];
                     final itemLabel = itemNames[m.itemId] ?? m.itemId;
                     final signedQty = m.type == MovementType.adjustment
-                        ? (m.quantity > 0 ? '+${m.quantity}' : '${m.quantity}')
-                        : '${m.quantity}';
+                        ? (m.quantity > 0
+                              ? '+${formatQty(m.quantity)}'
+                              : formatQty(m.quantity))
+                        : formatQty(m.quantity);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),

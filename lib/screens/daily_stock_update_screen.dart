@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
+import '../utils/format.dart';
 import '../widgets/stream_error_view.dart';
 
 String _heldLabel(StockItemModel item, double currentQty) {
   if (item.piecesPerPack <= 1) {
-    return 'Currently held: $currentQty ${item.pieceUnit}';
+    return 'Currently held: ${formatQty(currentQty)} ${item.pieceUnit}';
   }
   final packs = (currentQty / item.piecesPerPack).toStringAsFixed(1);
   return 'Currently held: $packs ${item.packLabel}(s) '
-      '($currentQty ${item.pieceUnit})';
+      '(${formatQty(currentQty)} ${item.pieceUnit})';
 }
 
 class DailyStockUpdateScreen extends StatefulWidget {
