@@ -14,6 +14,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   final _firestoreService = FirestoreService();
   late final Stream<List<BranchModel>> _branchesStream = _firestoreService
       .streamBranches();
+  final Set<String> _processingIds = {};
 
   Future<void> _showAddBranchDialog() async {
     final nameController = TextEditingController();
@@ -95,6 +96,59 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     );
   }
 
+  Future<void> _handleArchive(BranchModel branch) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Archive branch?'),
+        content: Text(
+          '"${branch.name}" will no longer appear for new sign-ups, but all '
+          "its existing orders, stock, and reports stay exactly as they are. "
+          'You can reactivate it any time from the Archived list.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _processingIds.add(branch.id));
+    try {
+      await _firestoreService.archiveBranch(branch.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to archive: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _processingIds.remove(branch.id));
+    }
+  }
+
+  Future<void> _handleReactivate(BranchModel branch) async {
+    setState(() => _processingIds.add(branch.id));
+    try {
+      await _firestoreService.reactivateBranch(branch.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to reactivate: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _processingIds.remove(branch.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<BranchModel>>(
@@ -117,25 +171,78 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
           );
         }
 
-        final branches = snapshot.data!
+        final branches = List.of(snapshot.data!)
           ..sort((a, b) => a.name.compareTo(b.name));
+        final active = branches.where((b) => b.active).toList();
+        final archived = branches.where((b) => !b.active).toList();
 
         return Stack(
           children: [
-            ListView.builder(
+            ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
-              itemCount: branches.length,
-              itemBuilder: (context, index) {
-                final branch = branches[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: const Icon(Icons.store),
-                    title: Text(branch.name),
-                    subtitle: Text(branch.location),
+              children: [
+                Text(
+                  'Active (${active.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if (active.isEmpty) const Text('No active branches.'),
+                ...active.map(
+                  (branch) => Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: const Icon(Icons.store),
+                      title: Text(branch.name),
+                      subtitle: Text(branch.location),
+                      trailing: _processingIds.contains(branch.id)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : TextButton(
+                              onPressed: () => _handleArchive(branch),
+                              child: const Text('Archive'),
+                            ),
+                    ),
                   ),
-                );
-              },
+                ),
+                if (archived.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Archived (${archived.length})',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  ...archived.map(
+                    (branch) => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.store,
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                        title: Text(branch.name),
+                        subtitle: Text(branch.location),
+                        trailing: _processingIds.contains(branch.id)
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : TextButton(
+                                onPressed: () => _handleReactivate(branch),
+                                child: const Text('Reactivate'),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             _buildFab(),
           ],

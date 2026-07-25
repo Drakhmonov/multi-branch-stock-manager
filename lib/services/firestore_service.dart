@@ -30,6 +30,17 @@ class FirestoreService {
     );
   }
 
+  /// Archives a branch rather than deleting it — its historical orders,
+  /// stock, and reports stay intact and keep resolving to a real name. Hides
+  /// it from active-use lists (e.g. sign-up) until reactivated.
+  Future<void> archiveBranch(String branchId) async {
+    await _db.collection('branches').doc(branchId).update({'active': false});
+  }
+
+  Future<void> reactivateBranch(String branchId) async {
+    await _db.collection('branches').doc(branchId).update({'active': true});
+  }
+
   /// Maps branchId -> branch name, for resolving ids on order/report screens.
   Stream<Map<String, String>> streamBranchNames() {
     return streamBranches().map(

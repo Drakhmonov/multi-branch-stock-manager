@@ -534,3 +534,27 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 **Issues & resolutions:**
 - The emulator crashed/disconnected once mid-session (`Lost connection to device` in the run log, `adb devices` came back empty, the emulator process itself had died) — restarted `adb` and relaunched the AVD; came back clean on the second attempt. Not investigated further since it didn't recur, but worth knowing this AVD has shown at least one instance of instability
 - This is the first phase actually verified on a real running Android build rather than just `flutter analyze`/`flutter test`/web compile-serve — worth treating Android as a first-class target for verification going forward now that the emulator exists, rather than falling back to web-only checks by default
+
+-----------
+
+## Phase 24 — Archive branches instead of deleting them
+**Dates:** 25 July 2026
+
+**Goal:** Manager had no way to remove a branch at all — `BranchManagementScreen` only ever had "Add Branch." Investigating what *would* happen if a branch were deleted surfaced a real risk: `firestore.rules` granted managers full `write` on `branches` (which covers delete), but Firestore has no cascade — deleting a branch document would silently orphan every `order`/`branchStock`/`stockMovement` referencing that `branchId`, with no warning. Rather than building real deletion, close the actual gap: branches get archived, never deleted, matching the immutable-history philosophy the rest of the app already follows (Phase 3's ledger, Phase 11's corrections-as-new-entries).
+
+**Completed:**
+- `BranchModel`: added `active` (bool, defaults `true`, including for existing branches with no such field yet)
+- `FirestoreService`: added `archiveBranch()`/`reactivateBranch()` — both just flip `active`, nothing else touches the document
+- `BranchManagementScreen`: split into **Active** and **Archived** sections; each active branch gets an "Archive" action behind a confirm dialog explaining what it does and doesn't do; each archived branch gets a one-tap "Reactivate"
+- `SignUpScreen`'s branch dropdown now filters to `active` branches only — audited every other `streamBranches()`/`streamBranchNames()` call site first (kitchen/delivery/manager order lists, branch home) and confirmed none of them should filter, since they all need to keep resolving names for archived branches too so historical orders stay readable rather than falling back to a raw id
+- Locked down the actual risk in `firestore.rules`: split `branches`' `allow write` into `allow create, update` (manager only, unchanged) and an explicit `allow delete: if false` — a branch document can no longer be deleted through the app's client SDK path at all, closing the gap that prompted this phase. (Caveat, and told to the user directly: this doesn't prevent someone with direct Firebase Console/project-owner access from deleting it anyway — security rules bind client SDK access, not Console access — so it's real defense-in-depth, not an absolute guarantee)
+- Added `active` coverage to `test/models/branch_model_test.dart` (defaults true, round-trips false, defaults true for pre-existing branches without the field)
+- Redeployed rules, rebuilt and relaunched on the Android emulator (still crashed and had to be relaunched once more, same instability noted in Phase 23), confirmed clean launch via screenshot; `flutter analyze` clean, 44 tests passing (up from 41)
+
+**Decisions made:**
+- Archive-with-a-visible-archived-list over the two alternatives considered (true delete gated on "zero related history," or no delete UI at all) — this was the user's explicit choice, and it's also the option most consistent with how the rest of the app already treats history
+- Deliberately did not add any bulk/cascading side effects to archiving (e.g. auto-reassigning staff, blocking new orders) — archiving only ever touches the branch document's own `active` flag; anything staff-facing (a branch-scoped order screen still functioning normally) keeps working exactly as before, since nothing about the branch's own id or data changed
+
+**Issues & resolutions:**
+- Same recurring emulator instability as Phase 23 (crashed between sessions, required an `adb`/AVD restart) — not a code issue, just this AVD
+- Couldn't click through the actual archive/reactivate flow in this environment — no manager credentials available here. Verified only that the app still launches cleanly on Android after the change; worth the user logging in as manager and archiving a real branch to confirm the UI end to end

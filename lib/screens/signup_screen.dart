@@ -138,7 +138,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       if (snapshot.hasError) {
                         return StreamErrorView(error: snapshot.error);
                       }
-                      final branches = snapshot.data ?? <BranchModel>[];
+                      final branches = (snapshot.data ?? <BranchModel>[])
+                          .where((b) => b.active)
+                          .toList();
                       return DropdownButtonFormField<String>(
                         initialValue: _selectedBranchId,
                         decoration: const InputDecoration(labelText: 'Branch'),

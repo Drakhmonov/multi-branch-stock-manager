@@ -35,9 +35,12 @@ service cloud.firestore {
     // Public read: the sign-up screen needs to list branches for a new user
     // to pick from before they have an account to be "signed in" with.
     // Names/locations aren't sensitive; only writes are restricted.
+    // Branches are archived (active: false), never deleted — historical
+    // orders/stock/reports referencing a branch must never be orphaned.
     match /branches/{branchId} {
       allow read: if true;
-      allow write: if isSignedIn() && myRole() == 'manager';
+      allow create, update: if isSignedIn() && myRole() == 'manager';
+      allow delete: if false;
     }
 
     // ---------- STOCK ITEMS (central) ----------
