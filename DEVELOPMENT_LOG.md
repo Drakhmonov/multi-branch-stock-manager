@@ -512,3 +512,25 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None. Same verification level as recent phases — `flutter analyze`/`flutter test`/compile-serve smoke test only, no live click-through in this environment
+
+-----------
+
+## Phase 23 — First real Android run, and a real Android-only bug it found
+**Dates:** 25 July 2026
+
+**Goal:** The Android target had been configured since Phase 1–2 but never actually run — every verification in every phase since has been Chrome/web only. Set up an emulator and confirm the app genuinely works on Android, not just "should work."
+
+**Completed:**
+- Installed an Android 36 (`google_apis`, x86_64) system image and created a `Pixel_8_API_36` AVD via the SDK tools already present on this machine (`flutter doctor` showed the Android toolchain fully installed and licensed, just never exercised)
+- First `flutter run -d emulator-...` build took ~10 minutes (Gradle had to pull down NDK, build-tools 36, platform 34, and CMake that hadn't been needed for web builds); confirmed via screenshot that the app launches cleanly — login screen, Phase 18 theme, no crash, no Firebase init failure
+- Found a real, Android-only bug during that first check: tapping the Email field on `LoginScreen`/`SignUpScreen` didn't reliably raise the keyboard, while Password did. Root cause: both fields used `keyboardType`/`obscureText` with no `autofillHints` set and weren't wrapped in an `AutofillGroup`, so Android's autofill negotiation on the email-shaped field could intercept the tap instead of handing off to the IME — confirmed in the device log by two consecutive `SHOW_SOFT_INPUT` requests both cancelled mid-animation (`onCancelled at PHASE_CLIENT_APPLY_ANIMATION`)
+- Fixed properly rather than working around it: wrapped both screens' fields in `AutofillGroup`, added correct `autofillHints` (`email`, `password` on login; `name`, `email`, `newPassword` on sign-up — distinct hint for sign-up since it's a new credential, not an existing one), and `textInputAction` so the software keyboard's "next"/"done" affordance chains between fields properly. This is the standard fix, not a hack — it also means a real password manager can now actually offer to save/fill credentials, which matters for a real business's staff logging in daily
+- Rebuilt and verified via `adb shell input tap`/`input text` directly against the running emulator: text now lands in the Email field correctly
+- `flutter analyze` clean, 41 tests still passing (no existing test touched either screen), rebuild verified live on-device
+
+**Decisions made:**
+- Verified with the actual device/log output rather than assuming a plausible cause — the IME tracker log lines confirming two cancelled show-keyboard animations were what turned "probably an autofill thing" into a confirmed root cause before writing the fix
+
+**Issues & resolutions:**
+- The emulator crashed/disconnected once mid-session (`Lost connection to device` in the run log, `adb devices` came back empty, the emulator process itself had died) — restarted `adb` and relaunched the AVD; came back clean on the second attempt. Not investigated further since it didn't recur, but worth knowing this AVD has shown at least one instance of instability
+- This is the first phase actually verified on a real running Android build rather than just `flutter analyze`/`flutter test`/web compile-serve — worth treating Android as a first-class target for verification going forward now that the emulator exists, rather than falling back to web-only checks by default

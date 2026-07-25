@@ -90,74 +90,87 @@ class _SignUpScreenState extends State<SignUpScreen> {
         maxWidth: 440,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<UserRole>(
-                initialValue: _role,
-                decoration: const InputDecoration(labelText: 'Role'),
-                items: _signUpRoles
-                    .map((r) => DropdownMenuItem(value: r, child: Text(r.name)))
-                    .toList(),
-                onChanged: (role) => setState(() {
-                  _role = role!;
-                  _selectedBranchId = null;
-                }),
-              ),
-              if (_role == UserRole.branchStaff) ...[
-                const SizedBox(height: 12),
-                StreamBuilder<List<BranchModel>>(
-                  stream: _branchesStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return StreamErrorView(error: snapshot.error);
-                    }
-                    final branches = snapshot.data ?? <BranchModel>[];
-                    return DropdownButtonFormField<String>(
-                      initialValue: _selectedBranchId,
-                      decoration: const InputDecoration(labelText: 'Branch'),
-                      items: branches
-                          .map(
-                            (b) => DropdownMenuItem(
-                              value: b.id,
-                              child: Text(b.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (branchId) =>
-                          setState(() => _selectedBranchId = branchId),
-                    );
-                  },
+          child: AutofillGroup(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.name],
                 ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.email],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(labelText: 'Password'),
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.newPassword],
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<UserRole>(
+                  initialValue: _role,
+                  decoration: const InputDecoration(labelText: 'Role'),
+                  items: _signUpRoles
+                      .map(
+                        (r) => DropdownMenuItem(value: r, child: Text(r.name)),
+                      )
+                      .toList(),
+                  onChanged: (role) => setState(() {
+                    _role = role!;
+                    _selectedBranchId = null;
+                  }),
+                ),
+                if (_role == UserRole.branchStaff) ...[
+                  const SizedBox(height: 12),
+                  StreamBuilder<List<BranchModel>>(
+                    stream: _branchesStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return StreamErrorView(error: snapshot.error);
+                      }
+                      final branches = snapshot.data ?? <BranchModel>[];
+                      return DropdownButtonFormField<String>(
+                        initialValue: _selectedBranchId,
+                        decoration: const InputDecoration(labelText: 'Branch'),
+                        items: branches
+                            .map(
+                              (b) => DropdownMenuItem(
+                                value: b.id,
+                                child: Text(b.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (branchId) =>
+                            setState(() => _selectedBranchId = branchId),
+                      );
+                    },
+                  ),
+                ],
+                const SizedBox(height: 20),
+                if (_errorMessage != null)
+                  Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                const SizedBox(height: 12),
+                _isLoading
+                    ? const CircularProgressIndicator()
+                    : ElevatedButton(
+                        onPressed: _handleSignUp,
+                        child: const Text('Create Account'),
+                      ),
               ],
-              const SizedBox(height: 20),
-              if (_errorMessage != null)
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
-              const SizedBox(height: 12),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _handleSignUp,
-                      child: const Text('Create Account'),
-                    ),
-            ],
+            ),
           ),
         ),
       ),
