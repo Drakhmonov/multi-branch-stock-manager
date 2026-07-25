@@ -558,3 +558,22 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 **Issues & resolutions:**
 - Same recurring emulator instability as Phase 23 (crashed between sessions, required an `adb`/AVD restart) — not a code issue, just this AVD
 - Couldn't click through the actual archive/reactivate flow in this environment — no manager credentials available here. Verified only that the app still launches cleanly on Android after the change; worth the user logging in as manager and archiving a real branch to confirm the UI end to end
+
+-----------
+
+## Phase 25 — Edit branch details, and a consistent action-menu pattern
+**Dates:** 25 July 2026
+
+**Goal:** User feedback after trying Phase 24 on-device: branch cards should offer **Edit** (change name/location) alongside Archive/Reactivate, as a proper two-option menu rather than a single flat button — matching how `StockCatalogScreen` already presents its per-item actions.
+
+**Completed:**
+- `FirestoreService.updateBranchDetails()` — metadata-only edit (name/location), same shape as the existing `updateStockItemDetails()`; never touches `active`
+- `BranchManagementScreen`: added an edit dialog (prefilled, same `showDialog`/`StatefulBuilder` pattern as every other add/edit dialog in the app), and replaced both branch cards' single trailing button with a `PopupMenuButton` offering **Edit** + **Archive** (active branches) or **Edit** + **Reactivate** (archived) — copied directly from `StockCatalogScreen`'s existing Restock/Edit/Delete menu for a consistent look across the two management screens, per the user's own framing ("looks professional")
+- No `firestore.rules` change needed — the existing `allow create, update` for managers already covers editing name/location with no field restriction
+- `flutter analyze` clean, 44 tests still passing (no test touches this screen), rebuilt and relaunched clean on the Android emulator
+
+**Decisions made:**
+- Reused `StockCatalogScreen`'s exact `PopupMenuButton<String>` shape rather than inventing a new one — two management screens in the same app should share the same action-menu language, not each pick their own
+
+**Issues & resolutions:**
+- None. Same verification ceiling as Phase 24 — confirmed the app still launches cleanly after the change, but couldn't click through the Edit dialog itself without manager credentials in this environment

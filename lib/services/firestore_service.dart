@@ -30,6 +30,19 @@ class FirestoreService {
     );
   }
 
+  /// Metadata-only edit: name/location. Never touches `active` — use
+  /// [archiveBranch]/[reactivateBranch] for that.
+  Future<void> updateBranchDetails({
+    required String branchId,
+    required String name,
+    required String location,
+  }) async {
+    await _db.collection('branches').doc(branchId).update({
+      'name': name,
+      'location': location,
+    });
+  }
+
   /// Archives a branch rather than deleting it — its historical orders,
   /// stock, and reports stay intact and keep resolving to a real name. Hides
   /// it from active-use lists (e.g. sign-up) until reactivated.

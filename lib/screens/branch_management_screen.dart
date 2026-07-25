@@ -96,6 +96,87 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     );
   }
 
+  Future<void> _showEditBranchDialog(BranchModel branch) async {
+    final nameController = TextEditingController(text: branch.name);
+    final locationController = TextEditingController(text: branch.location);
+    bool isSubmitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> submit() async {
+              final name = nameController.text.trim();
+              final location = locationController.text.trim();
+              if (name.isEmpty || location.isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Enter both a name and a location.'),
+                  ),
+                );
+                return;
+              }
+
+              setDialogState(() => isSubmitting = true);
+              try {
+                await _firestoreService.updateBranchDetails(
+                  branchId: branch.id,
+                  name: name,
+                  location: location,
+                );
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+              } catch (e) {
+                setDialogState(() => isSubmitting = false);
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('Failed to update: $e')),
+                  );
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Edit Branch'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: locationController,
+                    decoration: const InputDecoration(labelText: 'Location'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: isSubmitting ? null : submit,
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _handleArchive(BranchModel branch) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -202,9 +283,24 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                                 strokeWidth: 2,
                               ),
                             )
-                          : TextButton(
-                              onPressed: () => _handleArchive(branch),
-                              child: const Text('Archive'),
+                          : PopupMenuButton<String>(
+                              onSelected: (action) {
+                                if (action == 'edit') {
+                                  _showEditBranchDialog(branch);
+                                } else if (action == 'archive') {
+                                  _handleArchive(branch);
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'archive',
+                                  child: Text('Archive'),
+                                ),
+                              ],
                             ),
                     ),
                   ),
@@ -234,9 +330,24 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : TextButton(
-                                onPressed: () => _handleReactivate(branch),
-                                child: const Text('Reactivate'),
+                            : PopupMenuButton<String>(
+                                onSelected: (action) {
+                                  if (action == 'edit') {
+                                    _showEditBranchDialog(branch);
+                                  } else if (action == 'reactivate') {
+                                    _handleReactivate(branch);
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text('Edit'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'reactivate',
+                                    child: Text('Reactivate'),
+                                  ),
+                                ],
                               ),
                       ),
                     ),
