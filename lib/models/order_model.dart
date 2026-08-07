@@ -38,6 +38,7 @@ class OrderModel {
   final DateTime createdAt;
   final String placedByName;
   final String? note;
+  final DateTime? requestedDate;
   final DateTime? preparingAt;
   final String? preparingByName;
   final String? preparingNote;
@@ -59,6 +60,7 @@ class OrderModel {
     required this.createdAt,
     this.placedByName = 'Unknown',
     this.note,
+    this.requestedDate,
     this.preparingAt,
     this.preparingByName,
     this.preparingNote,
@@ -80,6 +82,8 @@ class OrderModel {
     'createdAt': createdAt.toIso8601String(),
     'placedByName': placedByName,
     if (note != null) 'note': note,
+    if (requestedDate != null)
+      'requestedDate': requestedDate!.toIso8601String(),
     if (preparingAt != null) 'preparingAt': preparingAt!.toIso8601String(),
     if (preparingByName != null) 'preparingByName': preparingByName,
     if (preparingNote != null) 'preparingNote': preparingNote,
@@ -107,6 +111,9 @@ class OrderModel {
     createdAt: DateTime.parse(map['createdAt']),
     placedByName: map['placedByName'] ?? 'Unknown',
     note: map['note'],
+    requestedDate: map['requestedDate'] != null
+        ? DateTime.parse(map['requestedDate'])
+        : null,
     preparingAt: map['preparingAt'] != null
         ? DateTime.parse(map['preparingAt'])
         : null,

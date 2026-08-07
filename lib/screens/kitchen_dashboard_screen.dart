@@ -53,6 +53,26 @@ class KitchenDashboardScreen extends StatelessWidget {
 
 bool _isPackaged(StockItemModel? item) => item != null && item.piecesPerPack > 1;
 
+String _withDateSuffix(String label, OrderModel order) {
+  final date = order.requestedDate;
+  if (date == null) return label;
+  return '$label — for ${formatRequestedDate(date)}';
+}
+
+/// "By `person`", the note (if any), then the existing item summary — so
+/// kitchen sees who ordered and any special instructions without having to
+/// open the detail sheet for every order.
+String _orderCardSubtitle(
+  OrderModel order,
+  Map<String, StockItemModel> catalogById,
+) {
+  final lines = ['By ${order.placedByName}'];
+  final note = order.note;
+  if (note != null && note.isNotEmpty) lines.add('Note: $note');
+  lines.add(orderItemsSummary(order.items, catalogById));
+  return lines.join('\n');
+}
+
 /// The quantity shown/entered in the prepare dialog's fields is in packs for
 /// a packaged item (matching how the branch ordered it), pieces otherwise.
 String _inputQtyFromPieces(double pieces, StockItemModel? stockItem) {
@@ -440,12 +460,14 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                             initialOrder: order,
                             branchName: branchNames[order.branchId],
                           ),
+                          isThreeLine: true,
                           title: Text(
-                            'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                            _withDateSuffix(
+                              'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                              order,
+                            ),
                           ),
-                          subtitle: Text(
-                            orderItemsSummary(order.items, catalogById),
-                          ),
+                          subtitle: Text(_orderCardSubtitle(order, catalogById)),
                           trailing: ElevatedButton(
                             onPressed: _processingIds.contains(order.id)
                                 ? null
@@ -480,12 +502,14 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                             initialOrder: order,
                             branchName: branchNames[order.branchId],
                           ),
+                          isThreeLine: true,
                           title: Text(
-                            'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                            _withDateSuffix(
+                              'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                              order,
+                            ),
                           ),
-                          subtitle: Text(
-                            orderItemsSummary(order.items, catalogById),
-                          ),
+                          subtitle: Text(_orderCardSubtitle(order, catalogById)),
                           trailing: ElevatedButton(
                             onPressed: _processingIds.contains(order.id)
                                 ? null
@@ -519,12 +543,14 @@ class _KitchenOrdersBodyState extends State<_KitchenOrdersBody> {
                             initialOrder: order,
                             branchName: branchNames[order.branchId],
                           ),
+                          isThreeLine: true,
                           title: Text(
-                            'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                            _withDateSuffix(
+                              'Branch: ${branchNames[order.branchId] ?? order.branchId}',
+                              order,
+                            ),
                           ),
-                          subtitle: Text(
-                            orderItemsSummary(order.items, catalogById),
-                          ),
+                          subtitle: Text(_orderCardSubtitle(order, catalogById)),
                           trailing: const Text('Awaiting delivery'),
                         ),
                       ),
@@ -614,10 +640,9 @@ class _KitchenHistoryBodyState extends State<_KitchenHistoryBody> {
                           initialOrder: order,
                           branchName: branchName,
                         ),
-                        title: Text(branchName),
-                        subtitle: Text(
-                          orderItemsSummary(order.items, catalogById),
-                        ),
+                        isThreeLine: true,
+                        title: Text(_withDateSuffix(branchName, order)),
+                        subtitle: Text(_orderCardSubtitle(order, catalogById)),
                         trailing: Text(orderStatusLabel(order.status)),
                       ),
                     );

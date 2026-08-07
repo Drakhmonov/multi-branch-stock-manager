@@ -187,6 +187,7 @@ class FirestoreService {
     required List<OrderItem> items,
     required String performedByName,
     String? note,
+    DateTime? requestedDate,
   }) async {
     final orderRef = _db.collection('orders').doc();
     await orderRef.set(
@@ -198,6 +199,7 @@ class FirestoreService {
         createdAt: DateTime.now(),
         placedByName: performedByName,
         note: note,
+        requestedDate: requestedDate,
       ).toMap(),
     );
   }

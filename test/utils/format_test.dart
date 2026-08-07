@@ -49,6 +49,26 @@ void main() {
     });
   });
 
+  group('formatRequestedDate', () {
+    test('shows "Today" for the current date', () {
+      expect(formatRequestedDate(DateTime.now()), 'Today');
+    });
+
+    test('shows "Tomorrow" for one day ahead', () {
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+
+      expect(formatRequestedDate(tomorrow), 'Tomorrow');
+    });
+
+    test('shows a plain date further out', () {
+      final farOut = DateTime.now().add(const Duration(days: 10));
+      final result = formatRequestedDate(farOut);
+
+      expect(result, isNot(anyOf('Today', 'Tomorrow')));
+      expect(result, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
+    });
+  });
+
   group('formatQty', () {
     test('drops the decimal for whole numbers', () {
       expect(formatQty(10), '10');

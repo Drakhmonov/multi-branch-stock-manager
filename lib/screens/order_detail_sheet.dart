@@ -94,6 +94,16 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         'Placed by ${order.placedByName}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      if (order.requestedDate != null)
+                        Text(
+                          'Requested for ${formatRequestedDate(order.requestedDate!)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      if (order.note != null && order.note!.isNotEmpty)
+                        Text(
+                          'Note: ${order.note}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       const SizedBox(height: 8),
                       Text(
                         orderItemsSummary(order.items, catalogById),

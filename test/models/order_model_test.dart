@@ -64,6 +64,7 @@ void main() {
       receivedAt: DateTime(2026, 7, 24, 9, 15),
       receivedByName: 'Branch Staff',
       receivedNote: 'All correct',
+      requestedDate: DateTime(2026, 7, 25),
     );
 
     test('round-trips every field through toMap/fromMap', () {
@@ -87,6 +88,7 @@ void main() {
       expect(restored.receivedAt, DateTime(2026, 7, 24, 9, 15));
       expect(restored.receivedByName, 'Branch Staff');
       expect(restored.receivedNote, 'All correct');
+      expect(restored.requestedDate, DateTime(2026, 7, 25));
     });
 
     test(
@@ -109,6 +111,7 @@ void main() {
         expect(restored.deliveredAt, isNull);
         expect(restored.receivedAt, isNull);
         expect(restored.note, isNull);
+        expect(restored.requestedDate, isNull);
       },
     );
 

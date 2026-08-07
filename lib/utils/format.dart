@@ -6,6 +6,22 @@ String formatTimestamp(DateTime t) {
   return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
 }
 
+/// A branch's requested delivery date, shown relative to today since that's
+/// the distinction that actually matters day-to-day ("do we need this out
+/// this afternoon or is tomorrow fine") rather than a bare calendar date.
+String formatRequestedDate(DateTime d) {
+  final today = DateTime.now();
+  final difference = DateTime(
+    d.year,
+    d.month,
+    d.day,
+  ).difference(DateTime(today.year, today.month, today.day)).inDays;
+  if (difference == 0) return 'Today';
+  if (difference == 1) return 'Tomorrow';
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${two(d.month)}-${two(d.day)}';
+}
+
 /// Every stock/order quantity is stored as a double (to allow fractional
 /// units like kg), but whole-number amounts — the overwhelming majority —
 /// shouldn't display as "10.0". Shows decimals only when the value actually
