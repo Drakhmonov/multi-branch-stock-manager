@@ -599,3 +599,30 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None new — same verification ceiling as recent phases: confirmed via emulator that the app builds, launches, and Auth/Firestore still work after each change, but the photo-pick-and-see flow itself hasn't been clicked through by a human yet in this environment
+
+-----------
+
+## Phase 27 — Order review step, delivery date, and a real reset bug
+
+**Dates:** 6–7 August 2026
+
+**Goal:** Live testing (Phase 26's photo build) surfaced a real bug — after submitting an order, the quantity fields still showed the numbers just typed even though the order had gone through. Following that thread surfaced a bigger, related gap: branches submitted orders blind (no chance to review before sending), had no way to say *when* delivery was needed, and kitchen only ever saw branch + an item summary on the order card, with the note dropped entirely from the detail sheet.
+
+**Completed:**
+- Root cause of the reset bug: `BranchOrderScreen`'s quantity `TextField`s had no `TextEditingController`, so Flutter preserved their own internal text across rebuilds independently of the app's cleared-on-submit state — a genuinely stale display, not just a cosmetic annoyance
+- Rebuilt the screen around real per-item controllers (keyed by `stockItemId`, created on demand) as the single source of truth for entered quantities, replacing the old separate tracking map entirely rather than patching around it
+- Added a two-step in-place flow (no new package, no `Stepper` widget — kept the same plain-toggle visual language the rest of the app already uses): **select** (items, note, new delivery-date picker) → **review** (delivery date, who's placing the order, the note, and each item's quantity — editable by going back, nothing cleared until actual submission) → submit → confirmation → screen genuinely resets (controllers cleared, date back to today, back to select step)
+- Delivery date: `showDatePicker` with `firstDate` pinned to today (blocks the past), new `formatRequestedDate()` helper renders it as "Today"/"Tomorrow"/a plain date — matching how the user actually described the need
+- `OrderModel.requestedDate` (nullable `DateTime`) added, following the exact optional-field pattern every other order timestamp already uses; no `firestore.rules` change needed since the `create` rule doesn't restrict the field set the way the status-transition `update` rules do
+- Kitchen's order cards (requested/preparing/prepared/history) and `order_detail_sheet.dart` now show who placed the order and the note — the note in particular had been silently dropped from the detail sheet since it was first built — plus the requested date when set
+- Added a `dispose()` override to the order screen (also cleaning up the note controller, which had never been disposed at all) since the per-item controller map made the omission impossible to keep ignoring
+- `flutter analyze` clean; `flutter test` 48 passing (up from 45, covering `requestedDate` round-trip/null-default and `formatRequestedDate`'s today/tomorrow/plain-date cases)
+
+**Decisions made:**
+- Derived quantities directly from controller text at submit/review time rather than keeping a controller *and* a separate live-synced map — the dual-state approach is exactly what caused the original bug, so the fix removes that class of bug rather than papering over one instance of it
+- User's explicit ask: show the placing staff member's name on the review screen, not just implied by who's logged in — added alongside the date; left the note's placement to judgement (kept it in review too, since it's part of what's being confirmed before sending)
+- Kept "show the requested date" separate from "let kitchen filter/sort by it" — the ask was visibility, not a scheduling view; flagged as an easy, deliberately-deferred follow-up now that the data exists
+
+**Issues & resolutions:**
+- This AVD's known instability (Phases 23–24) recurred once more (`Lost connection to device` right after a clean install) — retried and it came up fine second time, consistent with prior notes that this is the emulator, not the app
+- Real end-to-end verification this time, not just launch-clean: watched the live `adb`/Flutter log during testing and could see genuine interaction (login, text entered across multiple fields) with zero exceptions; user confirmed the flow directly ("this is good") before it was committed
