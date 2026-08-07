@@ -75,8 +75,9 @@ class FirestoreService {
   }
 
   /// Adds a new catalog item. [initialPacks] (default 0) seeds central stock
-  /// via the pack composition, same conversion [restock] uses.
-  Future<void> addStockItem({
+  /// via the pack composition, same conversion [restock] uses. Returns the
+  /// new item's id, so a photo can be uploaded and attached afterwards.
+  Future<String> addStockItem({
     required String name,
     required String pieceUnit,
     required String packLabel,
@@ -101,6 +102,7 @@ class FirestoreService {
         lastUpdated: DateTime.now(),
       ).toMap(),
     );
+    return itemRef.id;
   }
 
   /// Metadata-only edit: name/units/pack composition/reorder threshold.
@@ -119,6 +121,12 @@ class FirestoreService {
       'packLabel': packLabel,
       'piecesPerPack': piecesPerPack,
       'reorderThreshold': reorderThreshold,
+    });
+  }
+
+  Future<void> updateStockItemImage(String itemId, String imageBase64) async {
+    await _db.collection('stockItems').doc(itemId).update({
+      'imageBase64': imageBase64,
     });
   }
 

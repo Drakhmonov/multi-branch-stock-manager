@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 import '../utils/format.dart';
 import '../widgets/stream_error_view.dart';
+import '../widgets/stock_item_thumbnail.dart';
 
 class BranchOrderScreen extends StatefulWidget {
   final UserModel currentUser;
@@ -133,6 +134,9 @@ class _BranchOrderScreenState extends State<BranchOrderScreen> {
                         final item = filteredItems[index];
                         final isPackaged = item.piecesPerPack > 1;
                         return ListTile(
+                          leading: StockItemThumbnail(
+                            imageBase64: item.imageBase64,
+                          ),
                           title: Text(item.name),
                           subtitle: Text(_availableLabel(item)),
                           trailing: SizedBox(

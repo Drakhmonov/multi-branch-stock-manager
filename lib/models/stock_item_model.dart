@@ -17,6 +17,11 @@ class StockItemModel {
   final double currentQty;
   final double reorderThreshold;
   final DateTime lastUpdated;
+  // Resized/compressed photo, base64-encoded and stored inline rather than in
+  // Firebase Storage — Storage requires the Blaze plan, base64-in-Firestore
+  // doesn't. Kept small at write time (see stock_catalog_screen) to stay
+  // well under Firestore's 1MiB document limit.
+  final String? imageBase64;
 
   StockItemModel({
     required this.id,
@@ -29,6 +34,7 @@ class StockItemModel {
     required this.currentQty,
     required this.reorderThreshold,
     required this.lastUpdated,
+    this.imageBase64,
   });
 
   Map<String, dynamic> toMap() => {
@@ -41,6 +47,7 @@ class StockItemModel {
     'currentQty': currentQty,
     'reorderThreshold': reorderThreshold,
     'lastUpdated': lastUpdated.toIso8601String(),
+    'imageBase64': imageBase64,
   };
 
   factory StockItemModel.fromMap(String id, Map<String, dynamic> map) {
@@ -56,6 +63,7 @@ class StockItemModel {
       currentQty: (map['currentQty'] ?? 0).toDouble(),
       reorderThreshold: (map['reorderThreshold'] ?? 0).toDouble(),
       lastUpdated: DateTime.parse(map['lastUpdated']),
+      imageBase64: map['imageBase64'] as String?,
     );
   }
 }

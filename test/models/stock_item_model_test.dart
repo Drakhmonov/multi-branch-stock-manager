@@ -15,6 +15,7 @@ void main() {
         currentQty: 100,
         reorderThreshold: 40,
         lastUpdated: DateTime(2026, 7, 24, 9, 30),
+        imageBase64: 'ZmFrZS1pbWFnZS1ieXRlcw==',
       );
 
       final restored = StockItemModel.fromMap('i1', item.toMap());
@@ -28,6 +29,17 @@ void main() {
       expect(restored.currentQty, 100);
       expect(restored.reorderThreshold, 40);
       expect(restored.lastUpdated, DateTime(2026, 7, 24, 9, 30));
+      expect(restored.imageBase64, 'ZmFrZS1pbWFnZS1ieXRlcw==');
+    });
+
+    test('imageBase64 defaults to null when missing', () {
+      final item = StockItemModel.fromMap('i6', {
+        'name': 'No Photo Item',
+        'pieceUnit': 'pcs',
+        'lastUpdated': DateTime(2026, 1, 1).toIso8601String(),
+      });
+
+      expect(item.imageBase64, isNull);
     });
 
     test('falls back to legacy `unit` field when pieceUnit is missing', () {

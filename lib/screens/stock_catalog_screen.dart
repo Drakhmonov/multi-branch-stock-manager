@@ -1,9 +1,18 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/stock_item_model.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 import '../utils/format.dart';
 import '../widgets/stream_error_view.dart';
+import '../widgets/stock_item_thumbnail.dart';
+
+// Resized (see _pickItemImage) but a hard cap keeps us well under Firestore's
+// 1MiB document limit even for a busy/detailed photo.
+const _maxImageBytes = 700 * 1024;
 
 class StockCatalogScreen extends StatefulWidget {
   final UserModel currentUser;
@@ -16,9 +25,36 @@ class StockCatalogScreen extends StatefulWidget {
 
 class _StockCatalogScreenState extends State<StockCatalogScreen> {
   final _firestoreService = FirestoreService();
+  final _imagePicker = ImagePicker();
   late final Stream<List<StockItemModel>> _itemsStream = _firestoreService
       .streamStockItems();
   String _searchQuery = '';
+
+  /// Picks a photo, downscaled and compressed so the base64 encoding stays
+  /// well under Firestore's document size limit. Returns null if the user
+  /// cancelled or the (already-compressed) result is still too large.
+  Future<Uint8List?> _pickItemImage(BuildContext context) async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 600,
+      maxHeight: 600,
+      imageQuality: 70,
+    );
+    if (picked == null) return null;
+
+    final bytes = await picked.readAsBytes();
+    if (bytes.lengthInBytes > _maxImageBytes) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('That photo is too large — try a simpler one.'),
+          ),
+        );
+      }
+      return null;
+    }
+    return bytes;
+  }
 
   String _packCompositionLabel(StockItemModel item) {
     if (item.piecesPerPack <= 1) return item.pieceUnit;
@@ -41,12 +77,20 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
     final reorderThresholdController = TextEditingController(text: '0');
     final initialPacksController = TextEditingController(text: '0');
     bool isSubmitting = false;
+    Uint8List? pickedImageBytes;
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
+            Future<void> pickImage() async {
+              final bytes = await _pickItemImage(dialogContext);
+              if (bytes != null) {
+                setDialogState(() => pickedImageBytes = bytes);
+              }
+            }
+
             Future<void> submit() async {
               final name = nameController.text.trim();
               final pieceUnit = pieceUnitController.text.trim();
@@ -71,7 +115,7 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
 
               setDialogState(() => isSubmitting = true);
               try {
-                await _firestoreService.addStockItem(
+                final itemId = await _firestoreService.addStockItem(
                   name: name,
                   pieceUnit: pieceUnit,
                   packLabel: packLabel,
@@ -80,6 +124,13 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
                   reorderThreshold: reorderThreshold,
                   initialPacks: initialPacks,
                 );
+                final imageBytes = pickedImageBytes;
+                if (imageBytes != null) {
+                  await _firestoreService.updateStockItemImage(
+                    itemId,
+                    base64Encode(imageBytes),
+                  );
+                }
                 if (dialogContext.mounted) Navigator.of(dialogContext).pop();
               } catch (e) {
                 setDialogState(() => isSubmitting = false);
@@ -97,6 +148,40 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Center(
+                      child: GestureDetector(
+                        onTap: pickImage,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: pickedImageBytes == null
+                                  ? Container(
+                                      width: 96,
+                                      height: 96,
+                                      color: Theme.of(
+                                        dialogContext,
+                                      ).colorScheme.surfaceContainerHighest,
+                                      child: Icon(
+                                        Icons.add_a_photo_outlined,
+                                        color: Theme.of(
+                                          dialogContext,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    )
+                                  : Image.memory(
+                                      pickedImageBytes!,
+                                      width: 96,
+                                      height: 96,
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(
@@ -279,12 +364,20 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
       text: item.reorderThreshold.toStringAsFixed(0),
     );
     bool isSubmitting = false;
+    Uint8List? pickedImageBytes;
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
+            Future<void> pickImage() async {
+              final bytes = await _pickItemImage(dialogContext);
+              if (bytes != null) {
+                setDialogState(() => pickedImageBytes = bytes);
+              }
+            }
+
             Future<void> submit() async {
               setDialogState(() => isSubmitting = true);
               try {
@@ -299,6 +392,13 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
                       double.tryParse(reorderThresholdController.text.trim()) ??
                       0,
                 );
+                final imageBytes = pickedImageBytes;
+                if (imageBytes != null) {
+                  await _firestoreService.updateStockItemImage(
+                    item.id,
+                    base64Encode(imageBytes),
+                  );
+                }
                 if (dialogContext.mounted) Navigator.of(dialogContext).pop();
               } catch (e) {
                 setDialogState(() => isSubmitting = false);
@@ -316,6 +416,45 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Center(
+                      child: GestureDetector(
+                        onTap: pickImage,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: pickedImageBytes != null
+                              ? Image.memory(
+                                  pickedImageBytes!,
+                                  width: 96,
+                                  height: 96,
+                                  fit: BoxFit.cover,
+                                )
+                              : Stack(
+                                  alignment: Alignment.bottomRight,
+                                  children: [
+                                    StockItemThumbnail(
+                                      imageBase64: item.imageBase64,
+                                      size: 96,
+                                    ),
+                                    Container(
+                                      margin: const EdgeInsets.all(4),
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(
+                                          dialogContext,
+                                        ).colorScheme.surface,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.edit,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(labelText: 'Name'),
@@ -467,12 +606,9 @@ class _StockCatalogScreenState extends State<StockCatalogScreen> {
                               color: lowStock ? scheme.errorContainer : null,
                               margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
-                                leading: lowStock
-                                    ? Icon(
-                                        Icons.warning_amber,
-                                        color: scheme.onErrorContainer,
-                                      )
-                                    : const Icon(Icons.inventory_2_outlined),
+                                leading: StockItemThumbnail(
+                                  imageBase64: item.imageBase64,
+                                ),
                                 title: Text(item.name),
                                 subtitle: Text(
                                   '${_packCompositionLabel(item)}\n'

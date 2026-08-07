@@ -577,3 +577,25 @@ Purpose: (1) keeps the project honest about actual progress vs plan, (2) gives r
 
 **Issues & resolutions:**
 - None. Same verification ceiling as Phase 24 — confirmed the app still launches cleanly after the change, but couldn't click through the Edit dialog itself without manager credentials in this environment
+
+-----------
+
+## Phase 26 — Stock item photos, and a real Firebase-Storage-vs-cost decision
+**Dates:** 6–7 August 2026
+
+**Goal:** With the app finally exercised on Android (Phase 23), the next step was showing it to the actual business owner for a go/no-go decision. Two asks came out of that: distribute a test build without a Play Store account, and let branch staff see a photo of what they're ordering instead of reading a bare item name off a list.
+
+**Completed:**
+- Stock catalog: kitchen/manager can now attach a photo when adding or editing a catalog item; it shows as a thumbnail (new shared `StockItemThumbnail` widget) in both `StockCatalogScreen`'s list and `BranchOrderScreen`'s ordering list
+- First implementation used real Firebase Storage uploads (`StorageService`, `storage.rules` mirroring `firestore.rules`' kitchen/manager write restriction via a `firestore.get()` role lookup) — built, tested, and verified live on the `Pixel_8_API_36` emulator
+- Reversed that decision once it came time to actually enable Storage: Firebase now requires the paid Blaze plan to enable Storage at all, even though usage would stay free under quota — the user didn't want to attach billing for a not-yet-validated feature. Removed `firebase_storage`, `StorageService`, and `storage.rules` entirely rather than leaving dead code behind
+- Replaced with a Spark-compatible approach: `image_picker` still picks the photo, but it's resized to 600×600 and JPEG-compressed (quality 70) client-side, then base64-encoded and stored inline on the `stockItems` document (`StockItemModel.imageBase64`) — a hard 700KB cap on the encoded result guards against ever approaching Firestore's 1MiB document limit
+- `StockItemThumbnail` decodes via `Image.memory` instead of fetching a URL; this also made the feature Web-compatible as a side effect — the Storage version depended on `dart:io File` (mobile-only), the base64 version reads bytes straight from the picker's `XFile`, so it works on the Web target too, which has been the primary verified target since Phase 1
+- `flutter analyze` clean throughout both implementations; `flutter test` 45 passing (up from 44, covering `imageBase64` round-trip + null-default); rebuilt and relaunched clean on the Android emulator after each version
+
+**Decisions made:**
+- Base64-in-Firestore over Firebase Storage or a pasted-URL field — the user's explicit choice once the Blaze-plan requirement surfaced, favouring "no billing, same on-device pick-a-photo UX" over "proper file storage" at this pre-validation stage; worth revisiting Storage later if the owner confirms interest and image volume grows
+- Started setting up Firebase App Distribution (so the owner can test without a Play Store account) but paused before inviting anyone — waiting on the owner to confirm he actually has an Android device and when he wants to try it, rather than spending the round trip speculatively
+
+**Issues & resolutions:**
+- None new — same verification ceiling as recent phases: confirmed via emulator that the app builds, launches, and Auth/Firestore still work after each change, but the photo-pick-and-see flow itself hasn't been clicked through by a human yet in this environment
